@@ -7,13 +7,17 @@ import SignupPage from './pages/SignupPage'
 import NoticePage from './pages/NoticePage'
 import Layout from './components/Layout'
 
+import DashboardPage from './pages/DashboardPage'
+import TheatresPage from './pages/TheatresPage'
+import TheatreDetailsPage from './pages/TheatreDetailsPage'
+import TheatreFormPage from './pages/TheatreFormPage'
 import MoviesPage from './pages/MoviesPage'
 import ShowsPage from './pages/ShowsPage'
 import ProfilePage from './pages/ProfilePage'
 
 import './App.css'
 
-function Placeholder({ title, message }) {
+function Placeholder({ title, message, onBack }) {
 
   return (
     <div className="dash">
@@ -25,6 +29,11 @@ function Placeholder({ title, message }) {
       </header>
       <div className="panel empty-state">
         <p>This section will be implemented in a later stage.</p>
+        {onBack && (
+          <button className="btn-secondary" onClick={onBack}>
+            Back
+          </button>
+        )}
       </div>
     </div>
   )
@@ -111,45 +120,40 @@ function Shell() {
       user={user}
       breadcrumb={buildBreadcrumb(nav.name, nav.theatreId)}
     >
-      {nav.name === 'dashboard' && (
-        <Placeholder
-          title="Dashboard"
-          message="Owner dashboard and stats will be available in a later stage."
-        />
-      )}
+      {nav.name === 'dashboard' && <DashboardPage onNavigate={go} />}
 
-      {nav.name === 'theatres' && (
-        <Placeholder
-          title="Theatres"
-          message="Theatre management will be available in a later stage."
-        />
-      )}
+      {nav.name === 'theatres' && <TheatresPage onNavigate={go} />}
 
       {nav.name === 'add-theatre' && (
-        <Placeholder
-          title="Add Theatre"
-          message="Theatre creation will be available in a later stage."
+        <TheatreFormPage
+          onDone={({ saved, theatreId } = {}) => {
+            setNav(saved
+              ? { name: 'details', theatreId }
+              : { name: 'theatres', theatreId: null })
+          }}
         />
       )}
 
       {nav.name === 'edit-theatre' && (
-        <Placeholder
-          title="Edit Theatre"
-          message="Theatre editing will be available in a later stage."
+        <TheatreFormPage
+          theatreId={nav.theatreId}
+          onDone={({ saved } = {}) => {
+            setNav(saved
+              ? { name: 'theatres', theatreId: null }
+              : { name: 'details', theatreId: nav.theatreId })
+          }}
         />
       )}
 
       {nav.name === 'details' && (
-        <Placeholder
-          title={`Theatre #${nav.theatreId}`}
-          message="Theatre details will be available in a later stage."
-        />
+        <TheatreDetailsPage theatreId={nav.theatreId} onNavigate={go} />
       )}
 
       {nav.name === 'add-screen' && (
         <Placeholder
           title="Add Screen"
           message="Screen and seat layout management will be available in a later stage."
+          onBack={() => setNav({ name: 'details', theatreId: nav.theatreId })}
         />
       )}
 
