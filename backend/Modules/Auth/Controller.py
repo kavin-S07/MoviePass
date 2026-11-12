@@ -1,9 +1,10 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from Modules.Auth import Service
+from Modules.Auth import Service, SocialService
 from Modules.Auth.Dependencies import get_token
 from Modules.Auth.Schema import (
     ApprovalActionResponse,
@@ -16,6 +17,7 @@ from Modules.Auth.Schema import (
     UserLogin,
     UserSignup,
 )
+from Modules.Auth.Social import PROVIDERS, frontend_redirect
 from config.database import get_db
 
 
@@ -255,3 +257,68 @@ def reject_owner(
         db,
         owner_id
     )
+
+
+# Social login start: redirects the browser to the provider
+@router.get("/{provider}")
+async def social_start(
+    provider: str,
+    request: Request
+):
+
+    if provider not in PROVIDERS:
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Unsupported provider"
+        )
+
+    response = await SocialService.oauth_start(request, provider)
+
+    if isinstance(response, str):
+
+        return RedirectResponse(
+            url=response,
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT
+        )
+
+    return response
+
+
+# Social login callback: Authlib validates state/nonce/PKCE here
+@router.get("/{provider}/callback", name="social_callback")
+async def social_callback(
+    provider: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+
+    if provider not in PROVIDERS:
+
+        redirect = RedirectResponse(
+            url=frontend_redirect("booker", "error=unsupported_provider"),
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT
+        )
+
+        return redirect
+
+    target, refresh_token = await SocialService.oauth_callback(
+        db,
+        request,
+        provider
+    )
+
+    redirect = RedirectResponse(
+        url=target,
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT
+    )
+
+    if refresh_token:
+
+        Service.set_refresh_cookie(redirect, refresh_token)
+
+    else:
+
+        Service.clear_refresh_cookie(redirect)
+
+    return redirect
