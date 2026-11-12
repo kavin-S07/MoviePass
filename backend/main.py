@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from Middleware.jwtVerify import verify_jwt
+from Modules.Auth.Controller import router as auth_router
 
 
 load_dotenv()
@@ -56,6 +57,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+
+app.include_router(auth_router)
 
 
 @app.get("/")
