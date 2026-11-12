@@ -9,6 +9,9 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from Middleware.jwtVerify import verify_jwt
 from Modules.Auth.Controller import router as auth_router
+from Modules.Auth.Model import User
+from config.database import SessionLocal
+from config.Jwt import hash_password
 
 
 load_dotenv()
@@ -21,9 +24,48 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 OWNER_FRONTEND_URL = os.getenv("OWNER_FRONTEND_URL", "http://localhost:5174")
 
 
+# Create the default Admin account once, if it does not exist
+def seed_admin():
+
+    db = SessionLocal()
+
+    try:
+
+        admin_email = "admin@moviepass.com"
+
+        existing = db.query(User).filter(
+            User.email == admin_email
+        ).first()
+
+        if existing:
+
+            return
+
+        hashed = hash_password("Adminmoviepass")
+
+        admin = User(
+            name="Admin",
+            email=admin_email,
+            password=hashed,
+            role="ADMIN",
+            phone_no=None,
+            approval_status="APPROVED"
+        )
+
+        db.add(admin)
+
+        db.commit()
+
+    finally:
+
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Domain-module startup hooks (e.g. seed_admin) will be added in later stages.
+
+    seed_admin()
+
     yield
 
 
