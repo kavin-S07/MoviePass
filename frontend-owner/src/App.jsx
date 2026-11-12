@@ -14,30 +14,9 @@ import TheatreFormPage from './pages/TheatreFormPage'
 import MoviesPage from './pages/MoviesPage'
 import ShowsPage from './pages/ShowsPage'
 import ProfilePage from './pages/ProfilePage'
+import AddScreenPage from './pages/AddScreenPage'
 
 import './App.css'
-
-function Placeholder({ title, message, onBack }) {
-
-  return (
-    <div className="dash">
-      <header className="dash-header">
-        <div>
-          <h1>{title}</h1>
-          <p>{message}</p>
-        </div>
-      </header>
-      <div className="panel empty-state">
-        <p>This section will be implemented in a later stage.</p>
-        {onBack && (
-          <button className="btn-secondary" onClick={onBack}>
-            Back
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
 
 function Shell() {
 
@@ -150,13 +129,11 @@ function Shell() {
       )}
 
       {nav.name === 'add-screen' && (
-        <Placeholder
-          title="Add Screen"
-          message="Screen and seat layout management will be available in a later stage."
-          onBack={() => setNav({ name: 'details', theatreId: nav.theatreId })}
+        <AddScreenPage
+          theatreId={nav.theatreId}
+          onDone={() => setNav({ name: 'details', theatreId: nav.theatreId })}
         />
       )}
-
       {nav.name === 'movies' && <MoviesPage />}
       {nav.name === 'shows' && <ShowsPage />}
       {nav.name === 'profile' && <ProfilePage />}
