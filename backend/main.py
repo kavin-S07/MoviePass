@@ -11,6 +11,8 @@ from Middleware.jwtVerify import verify_jwt
 from Modules.Auth.Controller import router as auth_router
 from Modules.Theatres.Controller import router as theatre_router
 from Modules.Screens.Controller import router as screen_router
+from Modules.Movies.Controller import router as movies_router
+from Modules.Shows.Controller import router as shows_router
 from Modules.Auth.Model import User
 from config.database import SessionLocal
 from config.Jwt import hash_password
@@ -106,6 +108,8 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(theatre_router)
 app.include_router(screen_router)
+app.include_router(movies_router)
+app.include_router(shows_router)
 
 
 @app.get("/")
