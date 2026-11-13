@@ -53,7 +53,7 @@ const ICONS = {
   ),
 }
 
-const LINKS = [
+const OWNER_LINKS = [
   { key: 'dashboard', label: 'Dashboard', icon: ICONS.dashboard },
   { key: 'theatres', label: 'Theatres', icon: ICONS.theatres },
   { key: 'movies', label: 'Movies', icon: ICONS.movies },
@@ -61,16 +61,27 @@ const LINKS = [
   { key: 'profile', label: 'Profile', icon: ICONS.profile },
 ]
 
+const ADMIN_LINKS = [
+  { key: 'overview', label: 'Overview', icon: ICONS.dashboard },
+  { key: 'approvals', label: 'Owner Approvals', icon: ICONS.profile },
+  { key: 'users', label: 'Users', icon: ICONS.profile },
+  { key: 'theatres', label: 'Theatres', icon: ICONS.theatres },
+  { key: 'movies', label: 'Movies', icon: ICONS.movies },
+  { key: 'shows', label: 'Shows', icon: ICONS.shows },
+]
+
 // Collapsible sidebar with app navigation
-export default function Sidebar({ active, onNavigate, onLogout, user }) {
+export default function Sidebar({ active, onNavigate, onLogout, user, links, title }) {
 
   const [collapsed, setCollapsed] = useState(false)
+  const navLinks = links || (user?.role === 'ADMIN' ? ADMIN_LINKS : OWNER_LINKS)
+  const brandTitle = title || (user?.role === 'ADMIN' ? 'Admin Portal' : 'Owner Portal')
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-brand">
         <img className="sidebar-logo" src={logo} alt="MoviePass" />
-        {!collapsed && <span className="sidebar-title">Owner Portal</span>}
+        {!collapsed && <span className="sidebar-title">{brandTitle}</span>}
         <button
           className="sidebar-toggle"
           onClick={() => setCollapsed(!collapsed)}
@@ -81,7 +92,7 @@ export default function Sidebar({ active, onNavigate, onLogout, user }) {
       </div>
 
       <nav className="sidebar-nav">
-        {LINKS.map((link) => (
+        {navLinks.map((link) => (
           <button
             key={link.key}
             className={`sidebar-item ${active === link.key ? 'active' : ''}`}

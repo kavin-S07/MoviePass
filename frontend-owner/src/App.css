@@ -1335,3 +1335,92 @@ html {
   overflow-x: auto;
   max-width: 100%;
 }
+
+/* ============ Admin dashboard extensions ============ */
+.inline-success, .inline-error {
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.inline-success { background: #ecfdf3; color: #166534; border: 1px solid #bbf7d0; }
+.inline-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+.table-wrap { overflow-x: auto; }
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.data-table th, .data-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid #ececec;
+  vertical-align: top;
+}
+.data-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #666;
+  background: #fafafa;
+}
+.table-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-small {
+  width: auto;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 8px;
+  background: #e50914;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-small.danger { background: #1f1f1f; }
+.btn-small:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.filters-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.filters-row input, .filters-row select {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  min-width: 180px;
+  font-size: 14px;
+}
+.filters-row button { width: auto; }
+
+.pagination-row {
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.admin-form-grid input, .admin-form-grid textarea, .admin-form-grid select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-sizing: border-box;
+  font-size: 14px;
+}
+.admin-form-grid .span-2 { grid-column: span 2; }
+.small-text { font-size: 12px; margin-top: 2px; }
+.simple-list { margin: 8px 0 0; padding-left: 18px; }
+.simple-list li { margin: 4px 0; }
+
+@media (max-width: 900px) {
+  .admin-form-grid { grid-template-columns: 1fr; }
+  .admin-form-grid .span-2 { grid-column: span 1; }
+}
