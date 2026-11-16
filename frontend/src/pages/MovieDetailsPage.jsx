@@ -56,7 +56,7 @@ export default function MovieDetailsPage({ movieId, fetchDetail, onBack, onBook 
           <p className="details-meta">Release Date: {movie.release_date || 'TBA'}</p>
           <div className="details-actions">
             {canBook ? (
-              <button className="btn-primary" onClick={() => onBook(movie)}>Book Tickets</button>
+              <button className="btn-primary" onClick={() => onBook(movie)}>Book Tickets / View Showtimes</button>
             ) : (
               <button className="btn-disabled" disabled>{isComingSoon ? 'Booking opens when shows are available' : 'No shows available currently'}</button>
             )}

@@ -24,3 +24,6 @@ export const fetchBookerMovieDetail = (movieId, token) =>
 
 export const fetchBookerMovieShows = (movieId, params = {}, token) =>
   apiFetch(`/booker/movies/${movieId}/shows${qs(params)}`, { token })
+
+export const fetchBookerShowDiscovery = (movieId, params = {}, token) =>
+  apiFetch(`/booker/movies/${movieId}/show-discovery${qs(params)}`, { token })
