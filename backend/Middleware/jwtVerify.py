@@ -12,18 +12,20 @@ async def verify_jwt(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
 
-    # Skip login, signups, and cookie-based refresh/logout flows
+    # Skip login, signups, cookie-based refresh/logout flows, and provider webhooks
+    # (payment webhooks are authenticated via provider signature verification, not user JWT)
     if request.url.path in [
         "/auth/login",
         "/auth/signup",
         "/auth/signup/owner",
         "/auth/refresh",
         "/auth/logout",
+        "/bookings/payments/webhook",
     ]:
         return await call_next(request)
 
     # Skip public and documentation routes
-    if request.url.path in ["/", "/docs", "/openapi.json", "/redoc"]:
+    if request.url.path in ["/", "/health", "/docs", "/openapi.json", "/redoc"]:
         return await call_next(request)
 
     # Skip social OAuth routes (no MoviePass JWT yet)

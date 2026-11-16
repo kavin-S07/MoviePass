@@ -15,6 +15,8 @@ from Modules.Movies.Controller import router as movies_router
 from Modules.Shows.Controller import router as shows_router
 from Modules.Admin.Controller import router as admin_router
 from Modules.Booker.Controller import router as booker_router
+from Modules.Bookings.Controller import router as bookings_router
+from Modules.Notifications.Controller import router as notifications_router
 from Modules.Auth.Model import User
 from config.database import SessionLocal
 from config.Jwt import hash_password
@@ -121,6 +123,8 @@ app.include_router(movies_router)
 app.include_router(shows_router)
 app.include_router(admin_router)
 app.include_router(booker_router)
+app.include_router(bookings_router)
+app.include_router(notifications_router)
 
 
 @app.get("/")
@@ -129,3 +133,9 @@ def home():
     return {
         "message": "MoviePass API is running"
     }
+
+
+@app.get("/health")
+def health():
+
+    return {"status": "ok"}
