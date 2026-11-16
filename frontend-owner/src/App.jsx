@@ -173,23 +173,22 @@ function Shell() {
 
   // Wait until authentication restoration finishes
   if (!ready) {
-
     return (
-      <div className="loading-screen">
-        Checking your session...
+      <div className="auth-layout">
+        <div className="card loading-screen auth-card">Checking your session...</div>
       </div>
     )
   }
 
   // Not signed in -> show auth screens
   if (!user) {
-
-    if (loginPage === 'signup') {
-
-      return <SignupPage onSwitch={() => setLoginPage('login')} />
-    }
-
-    return <LoginPage onSwitch={() => setLoginPage('signup')} />
+    return (
+      <div className="auth-layout">
+        {loginPage === 'signup'
+          ? <SignupPage onSwitch={() => setLoginPage('login')} />
+          : <LoginPage onSwitch={() => setLoginPage('signup')} />}
+      </div>
+    )
   }
 
   // Signed-in routing by role and approval status
@@ -217,32 +216,35 @@ function Shell() {
   }
 
   if (user.role !== 'THEATRE_OWNER') {
-
     return (
-      <NoticePage
-        title="Owner Portal"
-        message="Ticket Bookers use the customer app at http://localhost:5173"
-      />
+      <div className="auth-layout">
+        <NoticePage
+          title="Owner Portal"
+          message="Ticket Bookers use the customer app at http://localhost:5173"
+        />
+      </div>
     )
   }
 
   if (user.approval_status === 'REJECTED') {
-
     return (
-      <NoticePage
-        title="Application Rejected"
-        message="Your Theatre Owner application was rejected. Please contact the administrator."
-      />
+      <div className="auth-layout">
+        <NoticePage
+          title="Application Rejected"
+          message="Your Theatre Owner application was rejected. Please contact the administrator."
+        />
+      </div>
     )
   }
 
   if (user.approval_status === 'PENDING' || !user.approval_status) {
-
     return (
-      <NoticePage
-        title="Application Under Review"
-        message="Your Theatre Owner application is awaiting Admin approval. You will be able to access your dashboard once it is approved."
-      />
+      <div className="auth-layout">
+        <NoticePage
+          title="Application Under Review"
+          message="Your Theatre Owner application is awaiting Admin approval. You will be able to access your dashboard once it is approved."
+        />
+      </div>
     )
   }
 

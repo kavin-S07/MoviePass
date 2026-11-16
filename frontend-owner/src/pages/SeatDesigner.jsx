@@ -1,22 +1,160 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-const ROW_LABELS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+import {
+  DEFAULT_SEAT,
+  MAX_SEAT,
+  MIN_SEAT,
+  buildGridTemplate,
+  cleanGaps,
+  fitSeatSize,
+  formatINR,
+  gridVars,
+  rowLabel,
+  seatKey,
+} from './seatLayoutUtils'
 
-function rowLabel(index) {
+const MAX_HISTORY = 60
 
-  if (index < 26) return ROW_LABELS[index]
-
-  // Beyond Z: AA, AB, ...
-  const first = Math.floor(index / 26) - 1
-
-  const second = index % 26
-
-  return ROW_LABELS[first] + ROW_LABELS[second]
+const ARROWS = {
+  ArrowUp: [-1, 0],
+  ArrowDown: [1, 0],
+  ArrowLeft: [0, -1],
+  ArrowRight: [0, 1],
 }
 
+// The editable part of the layout. Kept as one object so undo/redo is trivial.
+// { assignments: {'r-c': categoryName}, unavailable: Set, removed: Set, vGaps: [], hGaps: [] }
+function buildInitialDoc(screen, layout) {
+
+  const { no_of_rows: rows, no_of_columns: cols, categories, has_categories: hasCategories } = screen
+
+  const fallback = hasCategories ? categories[0]?.category_name : 'Standard'
+
+  const assignments = {}
+
+  for (let r = 0; r < rows; r++) {
+
+    for (let c = 0; c < cols; c++) assignments[seatKey(r, c)] = fallback
+  }
+
+  const doc = {
+    assignments,
+    unavailable: new Set(),
+    removed: new Set(),
+    // centre aisle for wider screens (gap AFTER this 0-based column)
+    vGaps: cols >= 8 ? [Math.floor(cols / 2) - 1] : [],
+    hGaps: [],
+  }
+
+  // Restore an earlier layout (Back from Preview / Back from Step 1)
+  const restorable =
+    layout &&
+    layout.no_of_rows === rows &&
+    layout.no_of_columns === cols &&
+    Array.isArray(layout.seats)
+
+  if (!restorable) return doc
+
+  const validNames = new Set(categories.map((c) => c.category_name))
+
+  const present = new Set()
+
+  for (const seat of layout.seats) {
+
+    const r = seat.row_number - 1
+
+    const c = seat.column_number - 1
+
+    if (!(r >= 0 && r < rows && c >= 0 && c < cols)) continue
+
+    const key = seatKey(r, c)
+
+    present.add(key)
+
+    if (!seat.is_active) doc.unavailable.add(key)
+
+    if (seat.category && validNames.has(seat.category)) doc.assignments[key] = seat.category
+  }
+
+  for (let r = 0; r < rows; r++) {
+
+    for (let c = 0; c < cols; c++) {
+
+      if (!present.has(seatKey(r, c))) doc.removed.add(seatKey(r, c))
+    }
+  }
+
+  doc.vGaps = cleanGaps(layout.layout_config?.column_gaps, cols)
+
+  doc.hGaps = cleanGaps(layout.layout_config?.row_gaps, rows)
+
+  return doc
+}
+
+const SeatCell = memo(function SeatCell({
+  r, c, label, category, color, selected, unavailable, tabStop, onDown, onEnter, onKey, onFocusSeat,
+}) {
+
+  const classes = ['seat']
+
+  // When our own key handler already toggled the seat, ignore the click the
+  // browser may still fire afterwards (Firefox fires one on Space keyup).
+  const keyToggledAt = useRef(0)
+
+  if (unavailable) classes.push('seat-unavailable')
+
+  if (selected) classes.push('seat-selected')
+
+  return (
+    <button
+      type="button"
+      className={classes.join(' ')}
+      style={unavailable ? undefined : { background: color, borderColor: color }}
+      data-seat={seatKey(r, c)}
+      tabIndex={tabStop ? 0 : -1}
+      aria-pressed={selected}
+      aria-label={`Seat ${label}, ${category || 'no category'}${unavailable ? ', unavailable' : ''}`}
+      onMouseDown={(e) => onDown(r, c, e)}
+      onMouseEnter={() => onEnter(r, c)}
+      onKeyDown={(e) => {
+
+        if (e.key === ' ' || e.key === 'Enter') keyToggledAt.current = Date.now()
+
+        onKey(r, c, e)
+      }}
+      onFocus={() => onFocusSeat(r, c)}
+      onClick={(e) => {
+        // Mouse presses are handled on mousedown. A click with detail 0 comes from
+        // assistive tech or the keyboard; toggle unless the key handler already did.
+        if (e.detail === 0 && Date.now() - keyToggledAt.current > 600) {
+          onKey(r, c, { key: ' ', preventDefault() {} })
+        }
+      }}
+    >
+      {label}
+    </button>
+  )
+})
+
+const RemovedCell = memo(function RemovedCell({ r, c, label, onRestore }) {
+
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      className="seat-placeholder asw-removed"
+      title={`No seat at ${label}. Click to restore it.`}
+      aria-label={`Restore seat ${label}`}
+      onClick={() => onRestore(r, c)}
+    />
+  )
+})
+
 // Standard seat layout designer.
-// Renders a cinema layout with aisles, gaps, blocks and categories.
-export default function SeatDesigner({ initialScreen, onSave, onBack }) {
+// Props (unchanged): initialScreen, onSave(payload), onBack().
+// Optional additions: initialLayout (a previous payload to restore) and
+// onBack(draftPayload), which now receives the current work-in-progress.
+export default function SeatDesigner({ initialScreen, initialLayout = null, onSave, onBack }) {
 
   const {
     screen_name,
@@ -27,107 +165,190 @@ export default function SeatDesigner({ initialScreen, onSave, onBack }) {
     has_categories,
   } = initialScreen
 
+  const [doc, setDoc] = useState(() => buildInitialDoc(initialScreen, initialLayout))
+
+  const [past, setPast] = useState([])
+
+  const [future, setFuture] = useState([])
+
   const [selected, setSelected] = useState(() => new Set())
 
-  const [unavailable, setUnavailable] = useState(() => new Set())
+  const [seatSize, setSeatSize] = useState(DEFAULT_SEAT)
 
-  const [removed, setRemoved] = useState(() => new Set())
+  const [focusKey, setFocusKey] = useState(seatKey(0, 0))
 
-  const [assignments, setAssignments] = useState(() => {
+  const [status, setStatus] = useState('')
 
-    const next = {}
+  const [vChoice, setVChoice] = useState('')
+
+  const [hChoice, setHChoice] = useState('')
+
+  const stageRef = useRef(null)
+
+  const dragRef = useRef(null)
+
+  const handlersRef = useRef({})
+
+  // ---- history ----
+
+  function commit(next) {
+
+    setPast((p) => [...p.slice(-(MAX_HISTORY - 1)), doc])
+
+    setFuture([])
+
+    setDoc(next)
+  }
+
+  function undo() {
+
+    if (!past.length) return
+
+    setFuture((f) => [doc, ...f])
+
+    setDoc(past[past.length - 1])
+
+    setPast(past.slice(0, -1))
+
+    setStatus('Undid the last change.')
+  }
+
+  function redo() {
+
+    if (!future.length) return
+
+    setPast((p) => [...p, doc])
+
+    setDoc(future[0])
+
+    setFuture(future.slice(1))
+
+    setStatus('Redid the change.')
+  }
+
+  function resetLayout() {
+
+    if (!window.confirm('Reset the layout? Seat categories, unavailable seats, removed seats and aisles go back to their defaults.')) return
+
+    commit(buildInitialDoc(initialScreen, null))
+
+    setSelected(new Set())
+
+    setStatus('Layout reset to defaults.')
+  }
+
+  // ---- lookups ----
+
+  const colorMap = useMemo(
+    () => new Map(categories.map((cat) => [cat.category_name, cat.color])),
+    [categories]
+  )
+
+  const colorOf = (name) => colorMap.get(name) || '#94a3b8'
+
+  const allKeys = useMemo(() => {
+
+    const keys = []
 
     for (let r = 0; r < no_of_rows; r++) {
 
-      for (let c = 0; c < no_of_columns; c++) {
-
-        next[`${r}-${c}`] = has_categories
-
-          ? categories[0]?.category_name
-          : 'Standard'
-      }
+      for (let c = 0; c < no_of_columns; c++) keys.push(seatKey(r, c))
     }
 
-    return next
-  })
+    return keys
 
-  // Where the vertical aisles go (gap inserted AFTER that column, 0-based)
-  const [vGaps, setVGaps] = useState(() => {
+  }, [no_of_rows, no_of_columns])
 
-    const gaps = []
+  const selection = useMemo(
+    () => [...selected].filter((k) => !doc.removed.has(k)),
+    [selected, doc.removed]
+  )
 
-    if (no_of_columns >= 8) gaps.push(Math.floor(no_of_columns / 2) - 1)  // center aisle
+  const firstFree = useMemo(
+    () => allKeys.find((k) => !doc.removed.has(k)) || seatKey(0, 0),
+    [allKeys, doc.removed]
+  )
 
-    return gaps
-  })
+  const tabKey = doc.removed.has(focusKey) ? firstFree : focusKey
 
-  // Where the horizontal aisles go (gap inserted AFTER that row, 0-based)
-  const [hGaps, setHGaps] = useState([])
+  // ---- selection ----
 
-  const [zoom, setZoom] = useState(1)
+  const selectAll = () => {
 
-  const [dragMode, setDragMode] = useState({ active: false, mode: 'add', anchor: null })
+    setStatus('')
 
-  // Stop rectangle-drag on mouseup anywhere
-  useEffect(() => {
-
-    const stop = () => setDragMode((d) => (d.active ? { ...d, active: false } : d))
-
-    window.addEventListener('mouseup', stop)
-
-    return () => window.removeEventListener('mouseup', stop)
-
-  }, [])
-
-  const seatKey = (r, c) => `${r}-${c}`
-
-  const isRemoved = (r, c) => removed.has(seatKey(r, c))
-
-  const isUnavailable = (r, c) => unavailable.has(seatKey(r, c))
-
-  const categoryOf = (r, c) => assignments[seatKey(r, c)]
-
-  const colorOf = (categoryName) => {
-
-    const found = categories.find((cat) => cat.category_name === categoryName)
-
-    return found?.color || '#94a3b8'
+    setSelected(new Set(allKeys.filter((k) => !doc.removed.has(k))))
   }
 
-  const toggleSeat = (r, c) => {
+  const clearSelection = () => {
 
-    if (isRemoved(r, c)) return
+    setStatus('')
 
-    const key = seatKey(r, c)
+    setSelected(new Set())
+  }
+
+  const toggleCells = (keys) => {
+
+    if (!keys.length) return
+
+    setStatus('')
 
     setSelected((prev) => {
 
+      const all = keys.every((k) => prev.has(k))
+
       const next = new Set(prev)
 
-      if (next.has(key)) next.delete(key)
-
-      else next.add(key)
+      keys.forEach((k) => (all ? next.delete(k) : next.add(k)))
 
       return next
     })
   }
 
-  const handleSeatMouseDown = (r, c, e) => {
+  const selectRow = (r) => {
 
-    // Ignore right clicks
+    const keys = []
+
+    for (let c = 0; c < no_of_columns; c++) {
+
+      if (!doc.removed.has(seatKey(r, c))) keys.push(seatKey(r, c))
+    }
+
+    toggleCells(keys)
+  }
+
+  const selectColumn = (c) => {
+
+    const keys = []
+
+    for (let r = 0; r < no_of_rows; r++) {
+
+      if (!doc.removed.has(seatKey(r, c))) keys.push(seatKey(r, c))
+    }
+
+    toggleCells(keys)
+  }
+
+  // click / drag a rectangle. The drag is always "base selection + rectangle",
+  // so dragging back shrinks the rectangle again.
+  const onSeatDown = (r, c, e) => {
+
     if (e.button !== 0) return
 
     e.preventDefault()
 
-    if (isRemoved(r, c)) return
-
     const key = seatKey(r, c)
+
+    if (doc.removed.has(key)) return
 
     const adding = !selected.has(key)
 
-    setDragMode({ active: true, mode: adding ? 'add' : 'remove', anchor: { r, c } })
+    dragRef.current = { mode: adding ? 'add' : 'remove', anchor: { r, c }, base: new Set(selected) }
 
-    // Apply immediately for single-click behaviour
+    setStatus('')
+
+    setFocusKey(key)
+
     setSelected((prev) => {
 
       const next = new Set(prev)
@@ -140,192 +361,214 @@ export default function SeatDesigner({ initialScreen, onSave, onBack }) {
     })
   }
 
-  const handleSeatMouseEnter = (r, c) => {
+  const onSeatEnter = (r, c) => {
 
-    if (!dragMode.active || !dragMode.anchor) return
+    const drag = dragRef.current
 
-    const { anchor, mode } = dragMode
+    if (!drag) return
 
-    const [r0, r1] = [Math.min(anchor.r, r), Math.max(anchor.r, r)]
+    const r0 = Math.min(drag.anchor.r, r)
 
-    const [c0, c1] = [Math.min(anchor.c, c), Math.max(anchor.c, c)]
+    const r1 = Math.max(drag.anchor.r, r)
 
-    setSelected((prev) => {
+    const c0 = Math.min(drag.anchor.c, c)
 
-      const next = new Set(prev)
+    const c1 = Math.max(drag.anchor.c, c)
 
-      for (let rr = r0; rr <= r1; rr++) {
+    const next = new Set(drag.base)
 
-        for (let cc = c0; cc <= c1; cc++) {
+    for (let rr = r0; rr <= r1; rr++) {
 
-          if (removed.has(seatKey(rr, cc))) continue
+      for (let cc = c0; cc <= c1; cc++) {
 
-          const key = seatKey(rr, cc)
+        const key = seatKey(rr, cc)
 
-          if (mode === 'add') next.add(key)
+        if (doc.removed.has(key)) continue
 
-          else next.delete(key)
-        }
-      }
+        if (drag.mode === 'add') next.add(key)
 
-      return next
-    })
-  }
-
-  const selectAll = () => {
-
-    const next = new Set()
-
-    for (let r = 0; r < no_of_rows; r++) {
-
-      for (let c = 0; c < no_of_columns; c++) {
-
-        if (!removed.has(seatKey(r, c))) next.add(seatKey(r, c))
+        else next.delete(key)
       }
     }
 
     setSelected(next)
   }
 
-  const clearSelection = () => setSelected(new Set())
+  const onSeatKey = (r, c, e) => {
 
-  const toggleBlockedSelected = () => {
+    if (e.key === ' ' || e.key === 'Enter') {
 
-    if (!selected.size) return
+      e.preventDefault()
 
-    setUnavailable((prev) => {
+      toggleCells([seatKey(r, c)])
 
-      const next = new Set(prev)
+      return
+    }
 
-      const allBlocked = [...selected].every((s) => next.has(s))
+    const delta = ARROWS[e.key]
 
-      for (const key of selected) {
+    if (!delta) return
 
-        if (allBlocked) next.delete(key)
+    e.preventDefault()
 
-        else next.add(key)
-      }
+    let rr = r + delta[0]
 
-      return next
-    })
+    let cc = c + delta[1]
+
+    while (
+      rr >= 0 && rr < no_of_rows && cc >= 0 && cc < no_of_columns &&
+      doc.removed.has(seatKey(rr, cc))
+    ) {
+
+      rr += delta[0]
+
+      cc += delta[1]
+    }
+
+    if (rr < 0 || rr >= no_of_rows || cc < 0 || cc >= no_of_columns) return
+
+    const key = seatKey(rr, cc)
+
+    setFocusKey(key)
+
+    if (e.shiftKey) setSelected((prev) => new Set(prev).add(key).add(seatKey(r, c)))
+
+    stageRef.current?.querySelector(`[data-seat="${key}"]`)?.focus()
+  }
+
+  // ---- edits (all undoable) ----
+
+  const assignCategory = (categoryName) => {
+
+    if (!selection.length) return
+
+    const assignments = { ...doc.assignments }
+
+    selection.forEach((k) => { assignments[k] = categoryName })
+
+    commit({ ...doc, assignments })
+
+    setStatus(`Assigned ${selection.length} seat${selection.length === 1 ? '' : 's'} to ${categoryName}.`)
+  }
+
+  const allSelectedBlocked = selection.length > 0 && selection.every((k) => doc.unavailable.has(k))
+
+  const toggleUnavailable = () => {
+
+    if (!selection.length) return
+
+    const unavailable = new Set(doc.unavailable)
+
+    selection.forEach((k) => (allSelectedBlocked ? unavailable.delete(k) : unavailable.add(k)))
+
+    commit({ ...doc, unavailable })
+
+    setStatus(
+      `${selection.length} seat${selection.length === 1 ? '' : 's'} marked ${allSelectedBlocked ? 'available' : 'unavailable'}.`
+    )
   }
 
   const removeSelected = () => {
 
-    if (!selected.size) return
+    if (!selection.length) return
 
-    if (!confirm(`Remove ${selected.size} seat(s) from the layout?`)) return
+    const removed = new Set(doc.removed)
 
-    setRemoved((prev) => {
+    const unavailable = new Set(doc.unavailable)
 
-      const next = new Set(prev)
+    selection.forEach((k) => {
 
-      for (const key of selected) next.add(key)
+      removed.add(k)
 
-      return next
+      unavailable.delete(k)
     })
 
-    setUnavailable((prev) => {
-
-      const next = new Set(prev)
-
-      for (const key of selected) next.delete(key)
-
-      return next
-    })
+    commit({ ...doc, removed, unavailable })
 
     setSelected(new Set())
+
+    setStatus(`Removed ${selection.length} seat${selection.length === 1 ? '' : 's'}. Use Undo to bring them back.`)
   }
 
-  const restoreRemoved = () => {
+  const restoreAll = () => {
 
-    if (!removed.size) return
+    if (!doc.removed.size) return
 
-    setRemoved(new Set())
+    commit({ ...doc, removed: new Set() })
+
+    setStatus('Restored all removed seats.')
   }
 
-  const assignCategory = (categoryName) => {
+  const restoreOne = (r, c) => {
 
-    if (!selected.size) return
+    const removed = new Set(doc.removed)
 
-    setAssignments((prev) => {
+    removed.delete(seatKey(r, c))
 
-      const next = { ...prev }
+    commit({ ...doc, removed })
 
-      for (const key of selected) {
-
-        if (removed.has(key)) continue
-
-        next[key] = categoryName
-      }
-
-      return next
-    })
+    setStatus(`Restored seat ${rowLabel(r)}${c + 1}.`)
   }
+
+  const addGap = (axis, value) => {
+
+    if (value === '') return
+
+    const key = axis === 'v' ? 'vGaps' : 'hGaps'
+
+    const next = [...new Set([...doc[key], Number(value)])].sort((a, b) => a - b)
+
+    commit({ ...doc, [key]: next })
+
+    if (axis === 'v') setVChoice('')
+
+    else setHChoice('')
+  }
+
+  const removeGap = (axis, value) => {
+
+    const key = axis === 'v' ? 'vGaps' : 'hGaps'
+
+    commit({ ...doc, [key]: doc[key].filter((g) => g !== value) })
+  }
+
+  // ---- summary ----
 
   const summary = useMemo(() => {
 
     const counts = {}
 
-    categories.forEach((cat) => {
-
-      counts[cat.category_name] = 0
-    })
+    categories.forEach((cat) => { counts[cat.category_name] = 0 })
 
     let blocked = 0
 
     let active = 0
 
-    for (let r = 0; r < no_of_rows; r++) {
+    for (const key of allKeys) {
 
-      for (let c = 0; c < no_of_columns; c++) {
+      if (doc.removed.has(key)) continue
 
-        const key = seatKey(r, c)
+      if (doc.unavailable.has(key)) {
 
-        if (removed.has(key)) continue
+        blocked++
 
-        if (unavailable.has(key)) {
-
-          blocked++
-
-          continue
-        }
-
-        const name = assignments[key]
-
-        if (name && counts[name] !== undefined) counts[name] += 1
-
-        active++
+        continue
       }
+
+      const name = doc.assignments[key]
+
+      if (name && counts[name] !== undefined) counts[name] += 1
+
+      active++
     }
 
-    return { counts, blocked, active, total: active + blocked }
+    return { counts, blocked, active, total: active + blocked, removed: doc.removed.size }
 
-  }, [assignments, unavailable, removed, no_of_rows, no_of_columns, categories])
+  }, [doc, allKeys, categories])
 
-  const toggleVGap = (colIndex) => {
+  // ---- payload (same shape as before) ----
 
-    setVGaps((prev) =>
-
-      prev.includes(colIndex)
-        ? prev.filter((g) => g !== colIndex)
-        : [...prev, colIndex].sort((a, b) => a - b)
-    )
-  }
-
-  const toggleHGap = (rowIndex) => {
-
-    setHGaps((prev) =>
-
-      prev.includes(rowIndex)
-        ? prev.filter((g) => g !== rowIndex)
-        : [...prev, rowIndex].sort((a, b) => a - b)
-    )
-  }
-
-  function buildPayload(showAll) {
-
-    const labelOf = (index) => rowLabel(index)
+  function buildPayload() {
 
     const seats = []
 
@@ -335,18 +578,14 @@ export default function SeatDesigner({ initialScreen, onSave, onBack }) {
 
         const key = seatKey(r, c)
 
-        if (removed.has(key)) continue
-
-        const isActive = !unavailable.has(key)
-
-        const categoryName = assignments[key]
+        if (doc.removed.has(key)) continue
 
         seats.push({
-          seat_name: `${labelOf(r)}${c + 1}`,
+          seat_name: `${rowLabel(r)}${c + 1}`,
           row_number: r + 1,
           column_number: c + 1,
-          category: categoryName,
-          is_active: isActive,
+          category: doc.assignments[key],
+          is_active: !doc.unavailable.has(key),
         })
       }
     }
@@ -363,224 +602,474 @@ export default function SeatDesigner({ initialScreen, onSave, onBack }) {
       layout_config: {
         row_labels: Array.from({ length: no_of_rows }, (_, i) => rowLabel(i)),
         column_labels: Array.from({ length: no_of_columns }, (_, i) => i + 1),
-        column_gaps: vGaps,
-        row_gaps: hGaps,
+        column_gaps: doc.vGaps,
+        row_gaps: doc.hGaps,
         sections: [],
       },
     }
   }
 
-  // Grid columns: label + seats with gaps inserted after given columns
-  const gridTemplate = buildGridTemplate(no_of_columns, vGaps)
+  // ---- view size ----
+
+  const fit = () => {
+
+    const el = stageRef.current
+
+    if (!el) return
+
+    setSeatSize(fitSeatSize(el.clientWidth - 32, no_of_columns, doc.vGaps.length))
+  }
+
+  useEffect(() => {
+
+    fit()
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ---- global listeners (kept stable via handlersRef) ----
+
+  useEffect(() => {
+
+    handlersRef.current = {
+      down: onSeatDown,
+      enter: onSeatEnter,
+      key: onSeatKey,
+      restore: restoreOne,
+      undo,
+      redo,
+      selectAll,
+      clear: clearSelection,
+      assignIndex: (i) => {
+
+        if (has_categories && categories[i]) assignCategory(categories[i].category_name)
+      },
+    }
+  })
+
+  const stableDown = useCallback((r, c, e) => handlersRef.current.down(r, c, e), [])
+
+  const stableEnter = useCallback((r, c) => handlersRef.current.enter(r, c), [])
+
+  const stableKey = useCallback((r, c, e) => handlersRef.current.key(r, c, e), [])
+
+  const stableRestore = useCallback((r, c) => handlersRef.current.restore(r, c), [])
+
+  const stableFocus = useCallback((r, c) => setFocusKey(seatKey(r, c)), [])
+
+  useEffect(() => {
+
+    const stopDrag = () => { dragRef.current = null }
+
+    const onKeyDown = (e) => {
+
+      const tag = e.target?.tagName
+
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+      const h = handlersRef.current
+
+      const mod = e.ctrlKey || e.metaKey
+
+      const k = e.key.toLowerCase()
+
+      if (mod && k === 'z') {
+
+        e.preventDefault()
+
+        if (e.shiftKey) h.redo()
+
+        else h.undo()
+
+        return
+      }
+
+      if (mod && k === 'y') {
+
+        e.preventDefault()
+
+        h.redo()
+
+        return
+      }
+
+      if (mod && k === 'a') {
+
+        e.preventDefault()
+
+        h.selectAll()
+
+        return
+      }
+
+      if (!mod && e.key === 'Escape') {
+
+        h.clear()
+
+        return
+      }
+
+      if (!mod && !e.altKey && /^[1-9]$/.test(e.key)) h.assignIndex(Number(e.key) - 1)
+    }
+
+    window.addEventListener('mouseup', stopDrag)
+
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+
+      window.removeEventListener('mouseup', stopDrag)
+
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [])
+
+  // ---- render ----
+
+  const template = buildGridTemplate(no_of_columns, doc.vGaps)
+
+  const vGapSet = new Set(doc.vGaps)
+
+  const hGapSet = new Set(doc.hGaps)
+
+  const vOptions = Array.from({ length: Math.max(no_of_columns - 1, 0) }, (_, i) => i)
+    .filter((i) => !vGapSet.has(i))
+
+  const hOptions = Array.from({ length: Math.max(no_of_rows - 1, 0) }, (_, i) => i)
+    .filter((i) => !hGapSet.has(i))
+
+  const theatreLabel = theatre_name || 'This theatre'
 
   return (
-    <div className="designer">
-      <header className="designer-topbar">
+    <div className="asw-designer-wrap">
+      <header className="dash-header asw-stepheader">
         <div>
           <h1>Edit Layout: {screen_name}</h1>
-          <p className="muted">
-            {theatre_name} • {no_of_rows} rows × {no_of_columns} columns • {summary.total} positions
+          <p>
+            {theatreLabel} • {no_of_rows} rows × {no_of_columns} columns • {summary.total} seats
+            {summary.removed > 0 && ` • ${summary.removed} positions removed`}
           </p>
         </div>
-
-        <div className="designer-topbar-actions">
-          <button className="btn-secondary btn-inline" onClick={onBack}>
-            ← Back
-          </button>
-          <button className="btn-primary" onClick={() => onSave(buildPayload(true))}>
-            Preview & Save
-          </button>
-        </div>
+        <span className="muted">Click or drag to select seats, then use the tools.</span>
       </header>
 
-      <div className="designer-body">
-        <aside className="designer-sidebar">
-          <div className="panel">
-            <div className="panel-head">
-              <h2>Screen Summary</h2>
-            </div>
-            <dl className="designer-meta">
-              <div><dt>Total seats</dt><dd>{summary.total}</dd></div>
-              <div><dt>Available</dt><dd>{summary.active}</dd></div>
-              <div><dt>Unavailable</dt><dd>{summary.blocked}</dd></div>
-              {categories.map((cat) => (
-                <div key={cat.category_name}>
-                  <dt>{cat.category_name}</dt>
-                  <dd>{summary.counts[cat.category_name] || 0}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
+      <div className="asw-designer">
+        <aside className="asw-side">
 
-          {has_categories && (
-            <div className="panel">
-              <div className="panel-head">
-                <h2>Categories</h2>
-                <span className="muted">{selected.size} selected</span>
+          <section className="panel asw-card" aria-label="Screen summary">
+            <h2>Screen summary</h2>
+
+            <dl className="asw-stats">
+              <div className="asw-stat">
+                <dt>Total seats</dt>
+                <dd>{summary.total}</dd>
               </div>
-              <div className="category-assign">
-                {categories.map((cat) => (
-                  <button
-                    key={cat.category_name}
-                    className="category-chip"
-                    style={{ '--chip': cat.color }}
-                    onClick={() => assignCategory(cat.category_name)}
-                  >
-                    <span className="chip-swatch" style={{ background: cat.color }} />
-                    {cat.category_name}
-                    <span className="chip-price">₹{cat.price}</span>
-                  </button>
+              <div className="asw-stat">
+                <dt>Available</dt>
+                <dd>{summary.active}</dd>
+              </div>
+              <div className="asw-stat">
+                <dt>Unavailable</dt>
+                <dd>{summary.blocked}</dd>
+              </div>
+            </dl>
+
+            <ul className="asw-catsum">
+              {categories.map((cat) => (
+                <li key={cat.category_name}>
+                  <span className="legend-dot" style={{ background: cat.color }} />
+                  <span className="asw-catsum-name">{cat.category_name}</span>
+                  <span className="asw-catsum-count">{summary.counts[cat.category_name] || 0}</span>
+                  <span className="muted">{formatINR(cat.price)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="panel asw-card" aria-label="Assign category">
+            <div className="asw-card-head">
+              <h2>{has_categories ? 'Assign category' : 'Pricing'}</h2>
+              <span className="muted">{selection.length} selected</span>
+            </div>
+
+            {has_categories ? (
+              <>
+                <div className="asw-assign">
+                  {categories.map((cat, i) => (
+                    <button
+                      key={cat.category_name}
+                      type="button"
+                      className="asw-assign-btn"
+                      style={{ '--chip': cat.color }}
+                      disabled={selection.length === 0}
+                      onClick={() => assignCategory(cat.category_name)}
+                    >
+                      <span className="legend-dot" style={{ background: cat.color }} />
+                      <span className="asw-assign-name">{cat.category_name}</span>
+                      <span className="muted">{formatINR(cat.price)}</span>
+                      {i < 9 && <kbd className="asw-kbd" aria-hidden="true">{i + 1}</kbd>}
+                    </button>
+                  ))}
+                </div>
+                <p className="asw-help">
+                  {selection.length === 0
+                    ? 'Select seats (or click a row letter / column number), then pick a category. Shortcut: press 1–9.'
+                    : `Applies to the ${selection.length} selected seat${selection.length === 1 ? '' : 's'}.`}
+                </p>
+              </>
+            ) : (
+              <p className="asw-help">
+                Every seat uses the single “Standard” category at {formatINR(categories[0]?.price)}.
+              </p>
+            )}
+          </section>
+
+          <section className="panel asw-card" aria-label="Aisles">
+            <h2>Aisles</h2>
+            <p className="asw-help">Add a walkway between columns or between rows.</p>
+
+            <div className="asw-aisle">
+              <label htmlFor="asw-vgap" className="asw-label">Aisle after column</label>
+              <div className="asw-aisle-add">
+                <select
+                  id="asw-vgap"
+                  className="asw-input"
+                  value={vChoice}
+                  disabled={vOptions.length === 0}
+                  onChange={(e) => setVChoice(e.target.value)}
+                >
+                  <option value="">{vOptions.length ? 'Choose…' : 'None available'}</option>
+                  {vOptions.map((i) => <option key={i} value={i}>{i + 1}</option>)}
+                </select>
+                <button type="button" className="asw-tool" disabled={vChoice === ''} onClick={() => addGap('v', vChoice)}>
+                  Add
+                </button>
+              </div>
+              <div className="asw-tags">
+                {doc.vGaps.length === 0 && <span className="muted">No column aisles</span>}
+                {doc.vGaps.map((g) => (
+                  <span className="asw-tag" key={g}>
+                    After column {g + 1}
+                    <button type="button" aria-label={`Remove aisle after column ${g + 1}`} onClick={() => removeGap('v', g)}>✕</button>
+                  </span>
                 ))}
               </div>
-              {selected.size === 0 && (
-                <p className="muted">Select seats to assign a category.</p>
-              )}
             </div>
-          )}
 
-          <div className="panel">
-            <div className="panel-head">
-              <h2>Seat Actions</h2>
+            <div className="asw-aisle">
+              <label htmlFor="asw-hgap" className="asw-label">Aisle after row</label>
+              <div className="asw-aisle-add">
+                <select
+                  id="asw-hgap"
+                  className="asw-input"
+                  value={hChoice}
+                  disabled={hOptions.length === 0}
+                  onChange={(e) => setHChoice(e.target.value)}
+                >
+                  <option value="">{hOptions.length ? 'Choose…' : 'None available'}</option>
+                  {hOptions.map((i) => <option key={i} value={i}>{rowLabel(i)}</option>)}
+                </select>
+                <button type="button" className="asw-tool" disabled={hChoice === ''} onClick={() => addGap('h', hChoice)}>
+                  Add
+                </button>
+              </div>
+              <div className="asw-tags">
+                {doc.hGaps.length === 0 && <span className="muted">No row aisles</span>}
+                {doc.hGaps.map((g) => (
+                  <span className="asw-tag" key={g}>
+                    After row {rowLabel(g)}
+                    <button type="button" aria-label={`Remove aisle after row ${rowLabel(g)}`} onClick={() => removeGap('h', g)}>✕</button>
+                  </span>
+                ))}
+              </div>
             </div>
-            <div className="designer-actions">
-              <button className="btn-small" onClick={selectAll}>Select All</button>
-              <button className="btn-small" onClick={clearSelection}>Clear</button>
-              <button className="btn-small" onClick={toggleBlockedSelected}>
-                {selected.size && [...selected].every((k) => unavailable.has(k))
-                  ? 'Mark Available'
-                  : 'Mark Unavailable'}
+          </section>
+
+        </aside>
+
+        <div className="asw-main">
+
+          <div className="panel asw-toolbar" role="toolbar" aria-label="Seat layout tools">
+            <div className="asw-tool-group" role="group" aria-label="Selection">
+              <button type="button" className="asw-tool" onClick={selectAll}>Select all</button>
+              <button type="button" className="asw-tool" onClick={clearSelection} disabled={selection.length === 0}>
+                Clear
               </button>
-              <button className="btn-small danger" onClick={removeSelected}>Remove Seats</button>
-              {removed.size > 0 && (
-                <button className="btn-small" onClick={restoreRemoved}>
-                  Restore Removed ({removed.size})
+            </div>
+
+            <div className="asw-tool-group" role="group" aria-label="Seat state">
+              <button type="button" className="asw-tool" onClick={toggleUnavailable} disabled={selection.length === 0}>
+                {allSelectedBlocked ? 'Mark available' : 'Mark unavailable'}
+              </button>
+              <button type="button" className="asw-tool asw-tool-danger" onClick={removeSelected} disabled={selection.length === 0}>
+                Remove seats
+              </button>
+              {doc.removed.size > 0 && (
+                <button type="button" className="asw-tool" onClick={restoreAll}>
+                  Restore removed ({doc.removed.size})
                 </button>
               )}
             </div>
-          </div>
 
-          <div className="panel">
-            <div className="panel-head">
-              <h2>View</h2>
+            <div className="asw-tool-group" role="group" aria-label="History">
+              <button type="button" className="asw-tool" onClick={undo} disabled={past.length === 0} title="Undo (Ctrl+Z)">
+                ↶ Undo
+              </button>
+              <button type="button" className="asw-tool" onClick={redo} disabled={future.length === 0} title="Redo (Ctrl+Shift+Z)">
+                ↷ Redo
+              </button>
+              <button type="button" className="asw-tool" onClick={resetLayout}>Reset</button>
             </div>
-            <div className="zoom-row">
-              <button className="btn-small" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}>−</button>
+
+            <div className="asw-tool-group asw-zoom" role="group" aria-label="View size">
+              <label htmlFor="asw-seat-size" className="muted">Seat size</label>
               <input
+                id="asw-seat-size"
                 type="range"
-                min="0.5"
-                max="1.6"
-                step="0.1"
-                value={zoom}
-                onChange={(e) => setZoom(Number(e.target.value))}
+                min={MIN_SEAT}
+                max={MAX_SEAT}
+                step="2"
+                value={seatSize}
+                onChange={(e) => setSeatSize(Number(e.target.value))}
               />
-              <button className="btn-small" onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(2)))}>+</button>
+              <button type="button" className="asw-tool" onClick={fit} title="Shrink or grow seats to fit the width">
+                Fit
+              </button>
             </div>
           </div>
-        </aside>
 
-        <div className="designer-stage">
-          <div className="designer-stage-scroll">
-            <div className="seat-stage-inner" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}>
-              <div className="screen-indicator">
-                <div className="screen-label">{screen_name.toUpperCase()}</div>
-                <div className="screen-caption">SCREEN THIS WAY</div>
-                <div className="screen-bar" />
-              </div>
+          <p className="asw-status" role="status" aria-live="polite">
+            {status || `${selection.length} seat${selection.length === 1 ? '' : 's'} selected`}
+          </p>
 
-              {Array.from({ length: no_of_rows }, (_, r) => (
-                <div key={r} className="seat-row" style={{ gridTemplateColumns: gridTemplate }}>
-                  <div className="row-label">{rowLabel(r)}</div>
+          <div className="panel asw-stage">
+            <div className="asw-stage-scroll" ref={stageRef}>
+              <div className="asw-grid" style={gridVars(seatSize)}>
+
+                <div className="seat-row asw-colhead" style={{ gridTemplateColumns: template }}>
+                  <span />
                   {Array.from({ length: no_of_columns }, (_, c) => (
-                    <SeatCell
-                      key={`${r}-${c}`}
-                      r={r}
-                      c={c}
-                      category={categoryOf(r, c)}
-                      color={colorOf(categoryOf(r, c))}
-                      removed={isRemoved(r, c)}
-                      unavailable={isUnavailable(r, c)}
-                      selected={selected.has(seatKey(r, c))}
-                      onDown={handleSeatMouseDown}
-                      onEnter={handleSeatMouseEnter}
-                    />
+                    <Fragment key={c}>
+                      <button
+                        type="button"
+                        className="asw-colbtn"
+                        aria-label={`Select column ${c + 1}`}
+                        title={`Select column ${c + 1}`}
+                        onClick={() => selectColumn(c)}
+                      >
+                        {c + 1}
+                      </button>
+                      {vGapSet.has(c) && <span className="seat-gap" aria-hidden="true" />}
+                    </Fragment>
                   ))}
                 </div>
-              ))}
 
-              <div className="seat-legend">
-                <span className="legend-item"><span className="legend-dot" style={{ background: '#94a3b8' }} />Standard / Regular</span>
-                {has_categories && categories.map((cat) => (
+                {Array.from({ length: no_of_rows }, (_, r) => (
+                  <Fragment key={r}>
+                    <div className="seat-row" style={{ gridTemplateColumns: template }}>
+                      <button
+                        type="button"
+                        className="row-label asw-rowbtn"
+                        aria-label={`Select row ${rowLabel(r)}`}
+                        title={`Select row ${rowLabel(r)}`}
+                        onClick={() => selectRow(r)}
+                      >
+                        {rowLabel(r)}
+                      </button>
+
+                      {Array.from({ length: no_of_columns }, (_, c) => {
+
+                        const key = seatKey(r, c)
+
+                        const label = `${rowLabel(r)}${c + 1}`
+
+                        return (
+                          <Fragment key={key}>
+                            {doc.removed.has(key)
+                              ? <RemovedCell r={r} c={c} label={label} onRestore={stableRestore} />
+                              : (
+                                <SeatCell
+                                  r={r}
+                                  c={c}
+                                  label={label}
+                                  category={doc.assignments[key]}
+                                  color={colorOf(doc.assignments[key])}
+                                  selected={selected.has(key)}
+                                  unavailable={doc.unavailable.has(key)}
+                                  tabStop={key === tabKey}
+                                  onDown={stableDown}
+                                  onEnter={stableEnter}
+                                  onKey={stableKey}
+                                  onFocusSeat={stableFocus}
+                                />
+                              )}
+                            {vGapSet.has(c) && <span className="seat-gap" aria-hidden="true" />}
+                          </Fragment>
+                        )
+                      })}
+                    </div>
+
+                    {hGapSet.has(r) && r < no_of_rows - 1 && <div className="asw-hgap" aria-hidden="true" />}
+                  </Fragment>
+                ))}
+
+                <div className="asw-screen asw-screen-bottom" aria-label="Movie screen position">
+                  <div className="asw-screen-curve" />
+                  <div className="asw-screen-label">MOVIE SCREEN</div>
+                  <div className="screen-caption">All seats face this way</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="seat-legend asw-legend" aria-label="Legend">
+              {has_categories
+                ? categories.map((cat) => (
                   <span className="legend-item" key={cat.category_name}>
                     <span className="legend-dot" style={{ background: cat.color }} />
                     {cat.category_name}
                   </span>
-                ))}
-                <span className="legend-item"><span className="legend-dot" style={{ background: '#1f2937' }} />Unavailable</span>
-              </div>
+                ))
+                : (
+                  <span className="legend-item">
+                    <span className="legend-dot" style={{ background: categories[0]?.color || '#3b82f6' }} />
+                    Available
+                  </span>
+                )}
+              <span className="legend-item"><span className="legend-dot dot-selected" />Selected</span>
+              <span className="legend-item"><span className="legend-dot dot-unavailable" />Unavailable (blocked)</span>
+              <span className="legend-item"><span className="legend-dot dot-removed" />Removed (no seat)</span>
             </div>
           </div>
+
+          <p className="asw-help asw-shortcuts">
+            Tips: drag to select a block · click a row letter or column number to select it · arrow keys move,
+            Space selects · Ctrl+Z undo · Esc clears · click a dashed spot to restore a removed seat.
+          </p>
         </div>
       </div>
 
-      <div className="designer-footer">
-        <p className="muted">
-          Tip: click to select seats, drag to select a block, then assign a category from the panel.
+      <div className="asw-actionbar">
+        <p className={`asw-hint ${summary.total === 0 ? 'asw-hint-warn' : 'muted'}`}>
+          {summary.total === 0
+            ? 'There are no seats left. Restore some seats to continue.'
+            : summary.active === 0
+              ? 'Every seat is unavailable, so customers will not be able to book this screen.'
+              : `Step 2 of 3 · ${summary.active} bookable seats across ${categories.length} categor${categories.length === 1 ? 'y' : 'ies'}.`}
         </p>
-        <div className="button-row">
-          <button className="btn-secondary" onClick={onBack}>← Back</button>
-          <button className="btn-primary" onClick={() => onSave(buildPayload(true))}>
-            Preview & Save →
+        <div className="asw-actionbar-buttons">
+          <button type="button" className="btn-secondary" onClick={() => onBack(buildPayload())}>
+            ← Back
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            disabled={summary.total === 0}
+            onClick={() => onSave(buildPayload())}
+          >
+            Preview &amp; Save →
           </button>
         </div>
       </div>
     </div>
-  )
-}
-
-// Seats are laid out as CSS grid with a custom template string
-function buildGridTemplate(cols, vGaps) {
-
-  const gapIndexes = new Set(vGaps)
-
-  const parts = ['40px']
-
-  for (let c = 0; c < cols; c++) {
-
-    parts.push('34px')
-
-    if (gapIndexes.has(c)) parts.push('26px')
-  }
-
-  return parts.join(' ')
-}
-
-function SeatCell({ r, c, category, color, removed, unavailable, selected, onDown, onEnter }) {
-
-  if (removed) {
-
-    return <div className="seat-placeholder" />
-  }
-
-  const classes = ['seat']
-
-  if (unavailable) classes.push('seat-unavailable')
-
-  else if (selected) classes.push('seat-selected')
-
-  const style = unavailable
-    ? { background: '#1f2937', color: '#9ca3af', borderColor: '#374151' }
-    : { background: color, borderColor: color }
-
-  return (
-    <button
-      type="button"
-      className={classes.join(' ')}
-      style={style}
-      aria-label={`Seat ${rowLabel(r)}${c + 1}`}
-      onMouseDown={(e) => onDown(r, c, e)}
-      onMouseEnter={() => onEnter(r, c)}
-    >
-      {rowLabel(r)}{c + 1}
-    </button>
   )
 }
