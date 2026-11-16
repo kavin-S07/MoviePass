@@ -12,6 +12,8 @@ from Modules.Auth.Schema import (
     HomeResponse,
     MessageResponse,
     PendingOwnerResponse,
+    ProfileResponse,
+    ProfileUpdateRequest,
     RefreshResponse,
     SessionResponse,
     UserLogin,
@@ -187,6 +189,35 @@ def revoke_session(
         request,
         response
     )
+
+
+# Get authenticated user's profile
+@router.get(
+    "/profile",
+    response_model=ProfileResponse,
+    status_code=status.HTTP_200_OK
+)
+def get_profile(
+    db: Session = Depends(get_db),
+    token: str = Depends(get_token)
+):
+
+    return Service.get_profile(db, token)
+
+
+# Update authenticated user's profile (name/phone only)
+@router.patch(
+    "/profile",
+    response_model=ProfileResponse,
+    status_code=status.HTTP_200_OK
+)
+def update_profile(
+    payload: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(get_token)
+):
+
+    return Service.update_profile(db, token, payload)
 
 
 # Home API (requires token)

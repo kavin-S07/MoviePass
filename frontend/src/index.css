@@ -1,0 +1,71 @@
+:root {
+  /* Cinematic Design System */
+  --bg-main: #0B1020;
+  --bg-secondary: #10182B;
+  --bg-card: #151C2E;
+  --bg-elevated: #1C263A;
+  --brand-primary: #F04438;
+  --brand-primary-hover: #D9362B;
+  --btn-secondary: #263248;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A7B0C0;
+  --text-muted: #778399;
+  --border-color: #263248;
+  --success: #22C55E;
+  --warning: #F5B942;
+  --error: #EF4444;
+  --info: #3B82F6;
+
+  /* Seat status */
+  --seat-available: #334155;
+  --seat-selected: #F04438;
+  --seat-booked: #64748B;
+  --seat-premium: #D4A64A;
+  --seat-unavailable: #252B36;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --transition: 160ms ease;
+
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: var(--bg-main);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { min-height: 100%; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--bg-main);
+  color: var(--text-primary);
+}
+
+a { color: inherit; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+img { max-width: 100%; }
+
+:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

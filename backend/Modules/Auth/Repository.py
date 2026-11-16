@@ -158,3 +158,13 @@ def revoke_all_user_refresh_sessions(db: Session, user_id: int):
         revoke_refresh_session(session)
 
     return sessions
+
+
+def update_user_profile(db: Session, user, *, name=None, phone_no=None):
+    if name is not None:
+        user.name = name
+    if phone_no is not None:
+        user.phone_no = phone_no
+    db.flush()
+    db.refresh(user)
+    return user

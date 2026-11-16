@@ -37,3 +37,18 @@ export const approveOwner = (ownerId, token) =>
 
 export const rejectOwner = (ownerId, token) =>
   apiFetch(`/auth/admin/reject/${ownerId}`, { method: 'POST', token })
+
+export const fetchProfile = (token) =>
+  apiFetch('/auth/profile', { token })
+
+export const updateProfile = (body, token) =>
+  apiFetch('/auth/profile', { method: 'PATCH', body, token })
+
+export const fetchSessions = (token) =>
+  apiFetch('/auth/sessions', { token })
+
+export const revokeSession = (sessionId, token) =>
+  apiFetch(`/auth/sessions/${sessionId}`, { method: 'DELETE', token })
+
+export const logoutAll = (token) =>
+  apiFetch('/auth/logout-all', { method: 'POST', token })

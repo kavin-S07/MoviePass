@@ -119,3 +119,22 @@ class SessionResponse(BaseModel):
     is_current: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProfileResponse(BaseModel):
+
+    user_id: int = Field(validation_alias="id")
+    name: str
+    email: EmailStr
+    phone_no: str | None = None
+    role: str
+    approval_status: str = "APPROVED"
+    account_created_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProfileUpdateRequest(BaseModel):
+
+    name: str | None = Field(default=None, min_length=2, max_length=100)
+    phone_no: str | None = Field(default=None, pattern=r"^[0-9]{10}$")

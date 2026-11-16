@@ -1,0 +1,1364 @@
+/* === Cinematic Theme Overrides (MoviePass) === */
+:root,.asw{--asw-red: var(--brand-primary);--asw-red-dark: var(--brand-primary-hover);--asw-border: var(--border-color);--asw-text: var(--text-primary);--asw-muted: var(--text-secondary);}
+.asw,.asw .panel,.asw .asw-panel,.asw .asw-card,.asw .form-card{background:var(--bg-card)!important;color:var(--text-primary)!important;border-color:var(--border-color)!important;}
+.asw input,.asw select,.asw textarea{background:var(--bg-secondary)!important;color:var(--text-primary)!important;border-color:var(--border-color)!important;}
+.asw .btn-primary,.asw button.btn-primary{background:var(--brand-primary)!important;border-color:var(--brand-primary)!important;color:#fff!important;}
+.asw .btn-secondary,.asw .btn-small{background:var(--btn-secondary)!important;color:#fff!important;border-color:var(--border-color)!important;}
+.asw .seat.seat-selected{outline-color:var(--brand-primary)!important;}
+/* ==========================================================================
+   Add Screen wizard (AddScreenPage, ScreenInfoForm, SeatDesigner, ScreenPreview)
+
+   Everything is scoped under `.asw`, so these rules win over the older
+   `.seat`, `.row-label`, `.btn-small` ... rules in App.css regardless of
+   import order, and nothing outside the Add Screen flow is affected.
+   Import: `import './AddScreen.css'` (already done in AddScreenPage.jsx).
+   ========================================================================== */
+
+.asw {
+  --asw-red: var(--brand-primary);
+  --asw-red-dark: var(--brand-primary-hover);
+  --asw-border: #e4e4e7;
+  --asw-soft: #f6f6f7;
+  --asw-text: #222;
+  --asw-muted: #777;
+
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1400px;
+  color: var(--asw-text);
+}
+
+.asw *,
+.asw *::before,
+.asw *::after {
+  box-sizing: border-box;
+}
+
+.asw-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.asw button:focus-visible,
+.asw input:focus-visible,
+.asw select:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* ---------- Header + stepper ---------- */
+
+.asw-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.asw-top h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+.asw-top p {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.asw-stepper {
+  list-style: none;
+  margin: 0;
+  padding: 14px 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.asw-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* connector line between steps */
+.asw-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: calc(100% - 190px);
+  min-width: 16px;
+  height: 2px;
+  background: var(--asw-border);
+  transform: translateY(-50%);
+}
+
+.asw-step.is-done:not(:last-child)::after {
+  background: var(--asw-red);
+}
+
+.asw-step-dot {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--bg-card);
+  color: #999;
+  border: 2px solid var(--asw-border);
+}
+
+.asw-step.is-current .asw-step-dot {
+  background: var(--asw-red);
+  border-color: var(--asw-red);
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.15);
+}
+
+.asw-step.is-done .asw-step-dot {
+  background: #15803d;
+  border-color: #15803d;
+  color: #fff;
+}
+
+.asw-step-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.asw-step-text strong {
+  font-size: 14px;
+  color: #999;
+}
+
+.asw-step-text small {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.asw-step.is-current .asw-step-text strong,
+.asw-step.is-done .asw-step-text strong {
+  color: var(--asw-text);
+}
+
+.asw-step.is-current .asw-step-text small,
+.asw-step.is-done .asw-step-text small {
+  color: var(--asw-muted);
+}
+
+.asw-stepheader h1 {
+  font-size: 22px;
+}
+
+.asw-empty {
+  text-align: center;
+  padding: 36px 20px;
+}
+
+.asw-empty h2 {
+  margin: 0 0 6px;
+}
+
+/* ---------- Shared form bits ---------- */
+
+.asw-form,
+.asw-preview,
+.asw-designer-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 96px; /* clear sticky action bar so bottom content/screen is not hidden */
+}
+
+.asw-section h2,
+.asw-card h2,
+.asw-aside h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.asw-section-sub {
+  margin: 4px 0 16px;
+  font-size: 13px;
+  color: var(--asw-muted);
+}
+
+.asw-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px 20px;
+}
+
+.asw-fields-narrow {
+  grid-template-columns: minmax(230px, 340px);
+  margin-top: 16px;
+}
+
+.asw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.asw-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+}
+
+.asw-req {
+  color: var(--asw-red);
+}
+
+.asw-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--asw-text);
+  background: var(--bg-card);
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+}
+
+.asw-input:hover {
+  border-color: #b4b4ba;
+}
+
+.asw-input:focus {
+  border-color: var(--asw-red);
+  outline: 2px solid rgba(229, 9, 20, 0.2);
+  outline-offset: 0;
+}
+
+.asw-input[aria-invalid="true"] {
+  border-color: #dc2626;
+  background: #fef7f7;
+}
+
+.asw-help {
+  margin: 0;
+  font-size: 12px;
+  color: var(--asw-muted);
+  line-height: 1.4;
+}
+
+.asw-err {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.asw-presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.asw-chipbtn {
+  border: 1px solid #d4d4d8;
+  background: var(--bg-card);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #444;
+  cursor: pointer;
+}
+
+.asw-chipbtn:hover {
+  border-color: var(--asw-red);
+  color: var(--asw-red);
+}
+
+.asw-btn-sm {
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
+.asw-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  border: 1px solid;
+}
+
+.asw-banner-err { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.asw-banner-ok { background: #ecfdf3; border-color: #bbf7d0; color: #166534; }
+.asw-banner-warn { background: var(--bg-card)beb; border-color: #fde68a; color: #92400e; }
+
+/* ---------- Step 1 layout ---------- */
+
+.asw-form-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  align-items: start;
+}
+
+.asw-form-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.asw-aside {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.asw-thumb {
+  background: var(--asw-soft);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.asw-thumb svg {
+  display: block;
+  width: 100%;
+  max-height: 240px;
+}
+
+.asw-thumb-empty {
+  text-align: center;
+  font-size: 12px;
+  color: var(--asw-muted);
+  padding: 36px 12px;
+}
+
+.asw-facts,
+.asw-kv {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.asw-facts div,
+.asw-kv div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding: 8px 10px;
+  background: var(--asw-soft);
+  border-radius: 8px;
+}
+
+.asw-facts dt,
+.asw-kv dt {
+  color: var(--asw-muted);
+}
+
+.asw-facts dd,
+.asw-kv dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+.asw-choices {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.asw-choices legend {
+  padding: 0;
+  margin-bottom: 8px;
+  grid-column: 1 / -1;
+}
+
+.asw-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.asw-choice input {
+  margin-top: 3px;
+  accent-color: var(--asw-red);
+}
+
+.asw-choice span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.asw-choice small {
+  color: var(--asw-muted);
+  font-size: 12px;
+}
+
+.asw-choice:has(input:checked) {
+  border-color: var(--asw-red);
+  background: var(--bg-card)5f5;
+}
+
+.asw-choice:focus-within {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* category editor */
+
+.asw-cats {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.asw-cats-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.asw-cats-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.asw-cat-cols,
+.asw-cat-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 2fr) 130px minmax(190px, 2.4fr) 38px;
+  gap: 12px;
+  align-items: start;
+}
+
+.asw-cat-cols {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 2px;
+}
+
+.asw-cat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.asw-cat-row {
+  padding: 10px;
+  background: var(--asw-soft);
+  border-radius: 10px;
+}
+
+.asw-cat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.asw-mini-label {
+  display: none;
+  font-size: 11px;
+  color: var(--asw-muted);
+}
+
+.asw-prefix {
+  position: relative;
+}
+
+.asw-prefix > span {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.asw-prefix .asw-input {
+  padding-left: 26px;
+}
+
+.asw-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.asw-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #cfcfd4;
+  cursor: pointer;
+  padding: 0;
+}
+
+.asw-swatch.selected {
+  box-shadow: 0 0 0 2px var(--asw-red);
+}
+
+.asw-colorpick {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: var(--bg-card);
+  cursor: pointer;
+}
+
+.asw-iconbtn {
+  width: 38px;
+  height: 40px;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: var(--bg-card);
+  color: #b91c1c;
+  cursor: pointer;
+}
+
+.asw-iconbtn:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.asw-iconbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Sticky action bar (all steps) ---------- */
+
+.asw-actionbar {
+  position: sticky;
+  bottom: 8px;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  margin-top: 4px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.16);
+}
+
+.asw-actionbar-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.asw-hint {
+  margin: 0;
+  font-size: 12px;
+}
+
+.asw-hint-warn {
+  color: #b45309;
+  font-weight: 600;
+}
+
+/* ---------- Step 2: designer ---------- */
+
+.asw-designer {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.asw-side {
+  position: sticky;
+  top: 8px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  padding-bottom: 12px;
+  scrollbar-gutter: stable;
+}
+
+.asw-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  align-self: start;
+}
+
+.asw-preview-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.asw-card {
+  padding: 16px;
+}
+
+.asw-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.asw-card h2 {
+  margin-bottom: 10px;
+}
+
+.asw-card-head h2 {
+  margin-bottom: 0;
+}
+
+.asw-stats,
+.asw-stats-row {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.asw-stats-row {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.asw-stat {
+  background: var(--asw-soft);
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+
+.asw-stats-row .asw-stat {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 14px 16px;
+}
+
+.asw-stat dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--asw-muted);
+}
+
+.asw-stat dd {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.asw-stat-text {
+  font-size: 17px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asw-catsum {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.asw-catsum li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.asw-catsum-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asw-catsum-count {
+  font-weight: 700;
+}
+
+.asw-assign {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.asw-assign-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  font-size: 13px;
+  background: var(--bg-card);
+  border: 1px solid #d4d4d8;
+  border-left: 5px solid var(--chip);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.asw-assign-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--chip) 10%, #fff);
+  border-color: var(--chip);
+}
+
+.asw-assign-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.asw-assign-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.asw-kbd {
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid #d4d4d8;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  background: #fafafa;
+}
+
+.asw-aisle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.asw-aisle-add {
+  display: flex;
+  gap: 8px;
+}
+
+.asw-aisle-add .asw-input {
+  padding: 7px 10px;
+}
+
+.asw-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.asw-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.asw-tag button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.asw-tag button:hover {
+  background: rgba(55, 48, 163, 0.15);
+}
+
+/* toolbar */
+
+.asw-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 10px 14px;
+}
+
+.asw-tool-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.asw-tool-group + .asw-tool-group {
+  padding-left: 18px;
+  border-left: 1px solid #e4e4e7;
+}
+
+.asw-tool {
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.asw-tool:hover:not(:disabled) {
+  background: #f4f4f5;
+  border-color: #b4b4ba;
+}
+
+.asw-tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.asw-tool-danger {
+  color: #b91c1c;
+  border-color: #f3c1c1;
+  background: var(--bg-card)5f5;
+}
+
+.asw-tool-danger:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #ef9a9a;
+}
+
+.asw-zoom input[type="range"] {
+  width: 110px;
+  accent-color: var(--asw-red);
+}
+
+.asw-status {
+  min-height: 18px;
+  margin: 0;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #444;
+}
+
+/* stage */
+
+.asw-stage {
+  padding: 0;
+  overflow: hidden;
+  min-width: 0;
+  width: 100%;
+}
+
+.asw-stage-scroll {
+  overflow: auto;
+  padding: 16px 16px 24px;
+  max-height: none;
+  min-height: 360px;
+  background:
+    radial-gradient(ellipse at top, rgba(0, 0, 0, 0.035), transparent 60%),
+    #fff;
+}
+
+.asw-preview-map .asw-stage-scroll {
+  max-height: none;
+  min-height: 360px;
+}
+
+.asw-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--seat-gap, 6px);
+  width: max-content;
+  min-width: min(100%, 320px);
+  margin: 0 auto;
+  padding-bottom: 8px;
+}
+
+.asw-screen {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.asw-screen.asw-screen-bottom {
+  margin-top: 24px;
+  margin-bottom: 4px;
+  padding: 10px 0 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 280px;
+  align-self: stretch;
+}
+
+.asw-screen-curve {
+  width: min(88%, 760px);
+  height: 16px;
+  border-top: 5px solid #c9d4e3;
+  border-radius: 50% / 100% 100% 0 0;
+  background: linear-gradient(to bottom, rgba(241, 245, 249, 0.98), rgba(241, 245, 249, 0));
+  box-shadow:
+    0 -8px 18px rgba(148, 163, 184, 0.28),
+    0 -1px 0 rgba(255, 255, 255, 0.8) inset;
+  margin: 0 auto 10px;
+}
+
+.asw-screen-label {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.asw-screen .screen-caption {
+  margin-top: 0;
+  color: #94a3b8;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.asw-screen-bar {
+  height: 8px;
+  margin: 8px 6% 0;
+  border-radius: 40px;
+  background: linear-gradient(90deg, #111, #555, #111);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+/* Seat grid pieces. Sizes come from CSS variables set by gridVars(). */
+
+.asw .seat-row {
+  display: grid;
+  align-items: center;
+  gap: var(--seat-gap, 6px);
+}
+
+.asw .seat,
+.asw .seat-placeholder {
+  width: var(--seat, 34px);
+  height: var(--seat, 34px);
+  padding: 0;
+}
+
+.asw .seat {
+  font-size: var(--seat-font, 10px);
+  line-height: 1;
+  border-radius: 7px 7px 3px 3px;
+  border: 1px solid transparent;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  user-select: none;
+}
+
+.asw .seat:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  z-index: 2;
+}
+
+.asw .seat-static {
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.asw .seat-static:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* blocked seats: dark + hatched so it is not colour alone */
+.asw .seat.seat-unavailable {
+  color: #9ca3af;
+  border-color: #374151;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.09) 0 3px, transparent 3px 7px),
+    #1f2937;
+  cursor: pointer;
+}
+
+.asw .seat-static.seat-unavailable {
+  cursor: default;
+}
+
+.asw .seat.seat-selected {
+  outline: 3px solid var(--asw-red);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.25);
+  z-index: 3;
+}
+
+.asw .seat:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+  z-index: 4;
+}
+
+.asw .seat-placeholder {
+  display: block;
+  border: 0;
+  background: transparent;
+}
+
+.asw .asw-removed {
+  border: 1px dashed #d4d4d8;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.asw .asw-removed:hover {
+  opacity: 1;
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.asw .row-label,
+.asw .asw-colbtn,
+.asw .asw-colnum {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.asw .row-label {
+  width: var(--label, 36px);
+}
+
+.asw .asw-rowbtn,
+.asw .asw-colbtn {
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.asw .asw-rowbtn {
+  height: var(--seat, 34px);
+}
+
+.asw .asw-rowbtn:hover,
+.asw .asw-colbtn:hover {
+  background: #fee2e2;
+  color: var(--asw-red);
+}
+
+.asw .asw-colhead {
+  position: sticky;
+  top: -16px;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.asw .asw-colnum {
+  height: 24px;
+  line-height: 24px;
+}
+
+.asw .seat-gap {
+  display: block;
+  width: var(--aisle, 27px);
+}
+
+.asw .asw-hgap {
+  height: var(--aisle, 27px);
+}
+
+/* legend */
+
+.asw .seat-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 16px;
+  padding: 12px 16px 14px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 12px;
+  color: #555;
+}
+
+.asw .legend-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.asw .dot-selected {
+  background: var(--bg-card);
+  box-shadow: 0 0 0 2px var(--asw-red);
+}
+
+.asw .dot-unavailable {
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.18) 0 2px, transparent 2px 5px),
+    #1f2937;
+}
+
+.asw .dot-removed {
+  background: transparent;
+  border: 1px dashed #a1a1aa;
+}
+
+.asw-shortcuts {
+  padding: 0 4px;
+}
+
+/* ---------- Step 3: preview ---------- */
+
+.asw-preview-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.asw-preview-info {
+  position: sticky;
+  top: 8px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  padding-bottom: 12px;
+  scrollbar-gutter: stable;
+}
+
+.asw-preview-info h2 {
+  margin: 0;
+}
+
+.asw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.asw-table th,
+.asw-table td {
+  padding: 9px 8px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+
+.asw-table thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--asw-muted);
+  background: #fafafa;
+}
+
+.asw-table tbody th {
+  font-weight: 600;
+}
+
+.asw-table tbody th .legend-dot {
+  margin-right: 8px;
+  vertical-align: -2px;
+}
+
+.asw-table tfoot th,
+.asw-table tfoot td {
+  font-weight: 800;
+  border-bottom: 0;
+}
+
+.asw-table .asw-num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.asw-confirm {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--bg-card)7ed;
+  border: 1px solid #fdba74;
+  border-radius: 12px;
+}
+
+.asw-confirm p {
+  margin: 4px 0 0;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1000px) {
+
+  /* the connector line would run under the step text on narrow widths */
+  .asw-step:not(:last-child)::after {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+
+  .asw-designer,
+  .asw-preview-layout,
+  .asw-form-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .asw-side,
+  .asw-aside,
+  .asw-preview-info {
+    position: static;
+    top: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .asw-stage-scroll {
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+
+  .asw-stepper {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .asw-step:not(:last-child)::after {
+    display: none;
+  }
+
+  .asw-cat-cols {
+    display: none;
+  }
+
+  .asw-cat-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .asw-cat-row > .asw-cat-cell:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .asw-cat-row > .asw-iconbtn {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 36px;
+  }
+
+  .asw-mini-label {
+    display: block;
+  }
+
+  .asw-tool-group + .asw-tool-group {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .asw-actionbar {
+    bottom: 0;
+  }
+
+  .asw-actionbar-buttons {
+    width: 100%;
+  }
+
+  .asw-actionbar-buttons > button {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .asw .seat {
+    transition: none;
+  }
+}

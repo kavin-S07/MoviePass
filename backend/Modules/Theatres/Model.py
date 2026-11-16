@@ -133,7 +133,7 @@ class Screen(Base):
     default_price = Column(DECIMAL(10, 2), nullable=True)
 
     layout_config = Column(
-        JSONB,
+        JSONB().with_variant(Text, "sqlite"),
         nullable=True
     )
 

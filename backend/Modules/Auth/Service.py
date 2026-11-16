@@ -725,3 +725,35 @@ def reject_owner(db: Session, owner_id: int):
     return {
         "message": f"Theatre owner {owner.name} rejected"
     }
+
+
+def _profile_payload(user):
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "phone_no": getattr(user, "phone_no", None),
+        "role": user.role,
+        "approval_status": getattr(user, "approval_status", "APPROVED"),
+        "account_created_at": getattr(user, "created_at", None),
+    }
+
+
+def get_profile(db: Session, token: str):
+    user = get_authenticated_user(db, token)
+    return _profile_payload(user)
+
+
+def update_profile(db: Session, token: str, payload):
+    user = get_authenticated_user(db, token)
+    data = payload.model_dump(exclude_unset=True) if hasattr(payload, "model_dump") else payload.dict(exclude_unset=True)
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No profile fields provided")
+    # Do not allow role/approval changes
+    for forbidden in ("role", "approval_status", "email", "password", "id", "user_id"):
+        if forbidden in data:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Field cannot be updated")
+    Repository.update_user_profile(db, user, name=data.get("name"), phone_no=data.get("phone_no"))
+    db.commit()
+    db.refresh(user)
+    return _profile_payload(user)

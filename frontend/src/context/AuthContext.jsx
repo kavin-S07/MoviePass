@@ -173,7 +173,7 @@ export function AuthProvider({ children, kind }) {
     setToken('')
   }
 
-  const value = { kind, user, token, landingError, ready, signup, login, logout }
+  const value = { kind, user, token, landingError, ready, signup, login, logout, setUser }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
