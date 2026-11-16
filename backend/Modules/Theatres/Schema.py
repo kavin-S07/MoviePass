@@ -65,7 +65,7 @@ class TheatrePayload(BaseModel):
         pattern=r"^[0-9]{10}$"
     )
 
-    status: str | None = Field(default="ACTIVE", pattern=r"^(ACTIVE|INACTIVE)$")
+    status: str | None = Field(default=None, pattern=r"^(ACTIVE|INACTIVE)$")
 
 
 class TheatreResponse(BaseModel):

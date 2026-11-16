@@ -9,6 +9,7 @@ from Modules.Booker.Schema import (
     BookerMovieDetailResponse,
     BookerMovieFiltersResponse,
     BookerMovieListResponse,
+    BookerShowDiscoveryResponse,
     BookerShowItem,
 )
 
@@ -77,7 +78,35 @@ def movie_shows(
     movie_id: int,
     city: str | None = Query(default=None),
     show_date: str | None = Query(default=None),
+    theatre_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     token: str = Depends(get_token),
 ):
-    return Service.get_movie_shows(db, token, movie_id, city=city, show_date=show_date)
+    return Service.get_movie_shows(db, token, movie_id, city=city, show_date=show_date, theatre_id=theatre_id)
+
+
+@router.get("/movies/{movie_id}/show-discovery", response_model=BookerShowDiscoveryResponse, status_code=status.HTTP_200_OK)
+def movie_show_discovery(
+    movie_id: int,
+    city: str | None = Query(default=None),
+    date: str | None = Query(default=None),
+    theatre_id: int | None = Query(default=None),
+    theatre_search: str | None = Query(default=None),
+    sort: str | None = Query(default="name_asc"),
+    lat: float | None = Query(default=None),
+    lng: float | None = Query(default=None),
+    db: Session = Depends(get_db),
+    token: str = Depends(get_token),
+):
+    return Service.get_movie_show_discovery(
+        db,
+        token,
+        movie_id,
+        city=city,
+        show_date=date,
+        theatre_id=theatre_id,
+        theatre_search=theatre_search,
+        sort_by=sort,
+        lat=lat,
+        lng=lng,
+    )

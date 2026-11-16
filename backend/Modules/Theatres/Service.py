@@ -200,11 +200,13 @@ def update_theatre(db: Session, token: str, theatre_id: int, payload):
             detail="You do not have access to this theatre"
         )
 
-    data = payload.model_dump(exclude_unset=True)
+    # Only apply fields explicitly provided by the client to avoid unintended resets
+    # (e.g. schema defaults overwriting existing values on partial payloads).
+    data = payload.model_dump(include=payload.model_fields_set)
 
-    if "status" in data and data["status"] is None:
-
-        data.pop("status")
+    # Preserve existing status when client does not provide a valid explicit value.
+    if "status" not in data or data.get("status") is None:
+        data["status"] = theatre.status or "ACTIVE"
 
     updated = Repository.update_theatre(db, theatre, data)
 

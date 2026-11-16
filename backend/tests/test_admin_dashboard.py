@@ -55,7 +55,7 @@ def reset_db():
                 pass
 
 
-def seed_admin(email="admin@test.local", password="Adminpass1"):
+def seed_admin(email="admin@example.com", password="Adminpass1"):
     db = TestingSessionLocal()
     try:
         admin = User(
@@ -82,7 +82,7 @@ def login(email, password):
 def test_admin_overview_requires_admin():
     reset_db()
     # create normal booker
-    res = client.post("/auth/signup", json={"name": "Booker", "email": "b@test.local", "password": "password123", "phone_no": "1234567890"})
+    res = client.post("/auth/signup", json={"name": "Booker", "email": "booker@example.com", "password": "password123", "phone_no": "1234567890"})
     assert res.status_code == 201
     token = res.json()["access_token"]
     r = client.get("/admin/overview", headers={"Authorization": f"Bearer {token}"})
@@ -95,7 +95,7 @@ def test_admin_overview_and_users_as_admin():
     # add pending owner
     db = TestingSessionLocal()
     try:
-        owner = User(name="Owner", email="o@test.local", password=hash_password("password123"), role="THEATRE_OWNER", phone_no="9999999999", approval_status="PENDING")
+        owner = User(name="Owner", email="owner@example.com", password=hash_password("password123"), role="THEATRE_OWNER", phone_no="9999999999", approval_status="PENDING")
         db.add(owner)
         db.commit()
     finally:

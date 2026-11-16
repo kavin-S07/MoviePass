@@ -1,7 +1,7 @@
 from datetime import date, datetime, time
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BookerMovieListItem(BaseModel):
@@ -47,11 +47,15 @@ class BookerShowItem(BaseModel):
     theatre_id: Optional[int] = None
     theatre_name: Optional[str] = None
     theatre_city: Optional[str] = None
+    theatre_address: Optional[str] = None
+    theatre_status: Optional[str] = None
     screen_name: Optional[str] = None
     show_date: date
     start_time: time
     end_time: time
     status: str
+    is_bookable: bool = False
+    availability_label: str = "unavailable"
 
 
 class BookerMovieFiltersResponse(BaseModel):
@@ -68,3 +72,39 @@ class BookerHomeResponse(BaseModel):
     trending: List[BookerMovieListItem]
     recommended: List[BookerMovieListItem]
     filters: BookerMovieFiltersResponse
+
+
+class BookerAvailableDate(BaseModel):
+    date: date
+    label: str
+    is_today: bool = False
+    is_tomorrow: bool = False
+    show_count: int = 0
+    is_selectable: bool = True
+
+
+class BookerTheatreShowtime(BaseModel):
+    theatre_id: int
+    theatre_name: str
+    address: str
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    theatre_status: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    distance_km: Optional[float] = None
+    screens: List[str] = Field(default_factory=list)
+    shows: List[BookerShowItem] = Field(default_factory=list)
+    active_show_count: int = 0
+
+
+class BookerShowDiscoveryResponse(BaseModel):
+    movie: BookerMovieDetailResponse
+    selected_city: Optional[str] = None
+    selected_date: Optional[date] = None
+    selected_theatre_id: Optional[int] = None
+    available_dates: List[BookerAvailableDate]
+    theatres: List[BookerTheatreShowtime]
+    total_theatres: int = 0
+    total_shows: int = 0
