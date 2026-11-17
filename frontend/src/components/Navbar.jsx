@@ -36,9 +36,8 @@ export default function Navbar({
   return (
     <header className="top-navbar">
       <div className="nav-left">
-        <button type="button" className="brand-btn" onClick={() => navigate('/')}>
+        <button type="button" className="brand-btn" onClick={() => navigate('/')} aria-label="MoviePass home">
           <img src={logo} alt="MoviePass" className="nav-logo" />
-          <span>MoviePass</span>
         </button>
         <nav className="nav-links" aria-label="Primary">
           <NavLink to="/" end className={linkClass}>Home</NavLink>

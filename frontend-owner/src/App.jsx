@@ -18,6 +18,7 @@ import ShowsPage from './pages/ShowsPage'
 import ShowFormPage from './pages/ShowFormPage'
 import ProfilePage from './pages/ProfilePage'
 import AddScreenPage from './pages/AddScreenPage'
+import ScreensPage from './pages/ScreensPage'
 import AdminOverviewPage from './pages/AdminOverviewPage'
 import AdminApprovalsPage from './pages/AdminApprovalsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
@@ -26,8 +27,7 @@ import AdminMoviesPage from './pages/AdminMoviesPage'
 import AdminShowsPage from './pages/AdminShowsPage'
 
 import './App.css'
-
-const ADMIN_NAMES = new Set(['overview', 'approvals', 'users', 'theatres', 'movies', 'shows'])
+import './ui.css'
 
 function parseNavFromPath(pathname, role) {
   const path = pathname.replace(/\/+$/, '') || '/'
@@ -45,6 +45,7 @@ function parseNavFromPath(pathname, role) {
 
   if (path === '/' || path === '/owner' || path === '/owner/dashboard') return { name: 'dashboard', theatreId: null }
   if (path === '/owner/theatres') return { name: 'theatres', theatreId: null }
+  if (path === '/owner/screens') return { name: 'screens', theatreId: null }
   if (path === '/owner/theatres/add') return { name: 'add-theatre', theatreId: null }
   if (path === '/owner/movies') return { name: 'movies', theatreId: null }
   if (path === '/owner/movies/add') return { name: 'add-movie', theatreId: null }
@@ -71,7 +72,7 @@ function parseNavFromPath(pathname, role) {
 }
 
 function pathForNav(name, theatreId = null, role) {
-  if (role === 'ADMIN' || ADMIN_NAMES.has(name)) {
+  if (role === 'ADMIN') {
     switch (name) {
       case 'overview': return '/admin/overview'
       case 'approvals': return '/admin/approvals'
@@ -86,6 +87,7 @@ function pathForNav(name, theatreId = null, role) {
   switch (name) {
     case 'dashboard': return '/owner/dashboard'
     case 'theatres': return '/owner/theatres'
+    case 'screens': return '/owner/screens'
     case 'add-theatre': return '/owner/theatres/add'
     case 'edit-theatre': return `/owner/theatres/${theatreId}/edit`
     case 'details': return `/owner/theatres/${theatreId}`
@@ -115,7 +117,7 @@ function Shell() {
   const [nav, setNav] = useState(() => parseNavFromPath(window.location.pathname, null) || { name: 'dashboard', theatreId: null })
 
   function go(name, theatreId = null, options = {}) {
-    const next = { name, theatreId }
+    const next = { name, theatreId, returnTo: options.returnTo, picker: options.picker }
     setNav(next)
     if (!user) return
     const path = pathForNav(name, theatreId, user.role)
@@ -248,22 +250,24 @@ function Shell() {
     )
   }
 
-  const activeTab = ['add-theatre', 'edit-theatre', 'details', 'add-screen'].includes(nav.name)
+  const activeTab = ['add-theatre', 'edit-theatre', 'details'].includes(nav.name)
     ? 'theatres'
-    : ['add-movie', 'edit-movie', 'movie-details'].includes(nav.name)
+    : nav.name === 'add-screen'
+      ? 'screens'
+      : ['add-movie', 'edit-movie', 'movie-details'].includes(nav.name)
       ? 'movies'
       : nav.name === 'add-show'
         ? 'shows'
         : nav.name
 
-  const activeNav = ['dashboard', 'theatres', 'movies', 'shows', 'profile'].includes(activeTab)
+  const activeNav = ['dashboard', 'theatres', 'screens', 'movies', 'shows', 'profile'].includes(activeTab)
     ? activeTab
     : 'dashboard'
 
   return (
     <Layout
       active={activeNav}
-      onNavigate={(name) => go(name)}
+      onNavigate={(name, id, options) => go(name, id ?? null, options)}
       onLogout={logout}
       user={user}
       breadcrumb={buildBreadcrumb(nav.name, nav.theatreId)}
@@ -300,9 +304,14 @@ function Shell() {
       {nav.name === 'add-screen' && (
         <AddScreenPage
           theatreId={nav.theatreId}
-          onDone={() => setNav({ name: 'details', theatreId: nav.theatreId })}
+          onDone={() => {
+            if (nav.returnTo === 'screens') go('screens')
+            else setNav({ name: 'details', theatreId: nav.theatreId })
+          }}
         />
       )}
+
+      {nav.name === 'screens' && <ScreensPage onNavigate={go} openPicker={Boolean(nav.picker)} />}
       {nav.name === 'movies' && <MoviesPage onNavigate={go} />}
       {nav.name === 'add-movie' && (
         <MovieFormPage
@@ -337,7 +346,8 @@ function buildBreadcrumb(name, theatreId) {
     case 'add-theatre': return 'Dashboard › Theatres › Add Theatre'
     case 'edit-theatre': return 'Dashboard › Theatres › Edit Theatre'
     case 'details': return `Dashboard › Theatres › Theatre #${theatreId}`
-    case 'add-screen': return 'Dashboard › Theatres › Add Screen'
+    case 'screens': return 'Dashboard › Screens'
+    case 'add-screen': return 'Dashboard › Screens › Add Screen'
     case 'movies': return 'Dashboard › Movies'
     case 'add-movie': return 'Dashboard › Movies › Add Movie'
     case 'edit-movie': return 'Dashboard › Movies › Edit Movie'

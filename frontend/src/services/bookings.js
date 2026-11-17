@@ -64,3 +64,9 @@ export const verifyTicket = (payload, token) =>
     body: payload,
     token,
   })
+
+export const cancelBooking = (bookingId, token) =>
+  apiFetch(`/bookings/${bookingId}/cancel`, {
+    method: 'POST',
+    token,
+  })

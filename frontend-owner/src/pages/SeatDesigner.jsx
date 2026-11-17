@@ -42,7 +42,7 @@ function buildInitialDoc(screen, layout) {
     unavailable: new Set(),
     removed: new Set(),
     // centre aisle for wider screens (gap AFTER this 0-based column)
-    vGaps: cols >= 8 ? [Math.floor(cols / 2) - 1] : [],
+    vGaps: [],
     hGaps: [],
   }
 
@@ -1012,6 +1012,7 @@ export default function SeatDesigner({ initialScreen, initialLayout = null, onSa
                     {hGapSet.has(r) && r < no_of_rows - 1 && <div className="asw-hgap" aria-hidden="true" />}
                   </Fragment>
                 ))}
+
 
                 <div className="asw-screen asw-screen-bottom" aria-label="Movie screen position">
                   <div className="asw-screen-curve" />

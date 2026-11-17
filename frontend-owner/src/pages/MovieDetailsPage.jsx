@@ -61,16 +61,16 @@ export default function MovieDetailsPage({ movieId, onNavigate }) {
               <img
                 src={movie.poster_url}
                 alt={`${movie.movie_name} poster`}
-                style={{ width: 180, height: 270, objectFit: 'cover', borderRadius: 10, border: '1px solid #e2e8f0', background: '#f8fafc' }}
+                style={{ width: '100%', maxWidth: 180, height: 'auto', aspectRatio: '2 / 3', objectFit: 'cover', borderRadius: 10, border: '1px solid #e2e8f0', background: '#f8fafc', flex: '0 0 auto' }}
                 onError={(e) => { e.currentTarget.style.display = 'none' }}
               />
             ) : (
-              <div style={{ width: 180, height: 270, borderRadius: 10, background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+              <div style={{ width: '100%', maxWidth: 180, aspectRatio: '2 / 3', borderRadius: 10, background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flex: '0 0 auto' }}>
                 No Poster
               </div>
             )}
-            <div style={{ flex: 1, minWidth: 240 }}>
-              <p style={{ whiteSpace: 'pre-wrap', marginTop: 0 }}>{movie.description || 'No description provided.'}</p>
+            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+              <p style={{ whiteSpace: 'pre-wrap', marginTop: 0, overflowWrap: 'anywhere' }}>{movie.description || 'No description provided.'}</p>
             </div>
           </div>
         </section>
@@ -81,7 +81,7 @@ export default function MovieDetailsPage({ movieId, onNavigate }) {
             {rows.map(([label, value]) => (
               <div key={label}>
                 <dt>{label}</dt>
-                <dd style={{ whiteSpace: 'pre-wrap' }}>{value}</dd>
+                <dd style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{value}</dd>
               </div>
             ))}
           </dl>

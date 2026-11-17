@@ -215,6 +215,8 @@ class BookingListItem(BaseModel):
     ticket_status: Optional[str] = None
     has_ticket: bool = False
     refund_status: Optional[str] = None
+    can_cancel: bool = False
+    cancel_blocked_reason: Optional[str] = None
 
 
 class MyBookingsResponse(BaseModel):
@@ -248,6 +250,9 @@ class BookingDetailResponse(BaseModel):
     payment_status: Optional[str] = None
     refund_status: Optional[str] = None
     ticket: Optional[TicketInfo] = None
+    can_cancel: bool = False
+    cancel_blocked_reason: Optional[str] = None
+    cancellation_policy: Optional[str] = None
 
 
 class TicketResponse(BaseModel):
@@ -275,3 +280,14 @@ class VerifyTicketResponse(BaseModel):
     movie_name: Optional[str] = None
     theatre_name: Optional[str] = None
     screen_name: Optional[str] = None
+
+
+class CancelBookingResponse(BaseModel):
+    booking_id: int
+    booking_reference: str
+    booking_status: str
+    refund_status: Optional[str] = None
+    message: str
+    can_cancel: bool = False
+    cancel_blocked_reason: Optional[str] = None
+    cancellation_policy: Optional[str] = None

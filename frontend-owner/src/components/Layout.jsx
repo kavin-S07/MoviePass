@@ -1,10 +1,28 @@
+import { useEffect, useState } from 'react'
 import Sidebar from './Sidebar'
+import Navbar from './Navbar'
 
-// App shell: fixed sidebar + scrolling main content
+// App shell: sidebar + top navbar + scrolling content
 export default function Layout({ active, onNavigate, onLogout, user, children, breadcrumb, links, title }) {
 
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // Close the mobile drawer with Escape
+  useEffect(() => {
+
+    if (!drawerOpen) return undefined
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') setDrawerOpen(false)
+    }
+
+    document.addEventListener('keydown', onKey)
+
+    return () => document.removeEventListener('keydown', onKey)
+  }, [drawerOpen])
+
   return (
-    <div className="owner-shell">
+    <div className="app-shell">
       <Sidebar
         active={active}
         onNavigate={onNavigate}
@@ -12,13 +30,23 @@ export default function Layout({ active, onNavigate, onLogout, user, children, b
         user={user}
         links={links}
         title={title}
+        mobileOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
       />
-      <main className="owner-main">
-        {breadcrumb && (
-          <div className="breadcrumb">{breadcrumb}</div>
-        )}
-        {children}
-      </main>
+
+      {drawerOpen && <div className="sb-scrim" onClick={() => setDrawerOpen(false)} aria-hidden="true" />}
+
+      <div className="app-body">
+        <Navbar
+          breadcrumb={breadcrumb}
+          user={user}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+          onMenu={() => setDrawerOpen(true)}
+          menuOpen={drawerOpen}
+        />
+        <main className="app-main">{children}</main>
+      </div>
     </div>
   )
 }
