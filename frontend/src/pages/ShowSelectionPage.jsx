@@ -6,11 +6,6 @@ function fmtTime(t) {
   return String(t).slice(0, 5)
 }
 
-function labelForDate(d) {
-  if (!d) return ''
-  return d
-}
-
 export default function ShowSelectionPage({
   movieId,
   city,
@@ -188,7 +183,7 @@ export default function ShowSelectionPage({
                       type="button"
                       className={`showtime-chip ${cls} ${isSelected ? 'selected' : ''}`}
                       disabled={disabled}
-                      onClick={() => !disabled && onShowSelect(show, theatre)}
+                      onClick={() => { if (disabled) return; onShowSelect(show, theatre); onContinueToSeats?.(show, data?.movie) }}
                       title={disabled ? (show.availability_label === 'cancelled' ? 'Cancelled show cannot be booked' : 'Show unavailable') : `Select ${fmtTime(show.start_time)} show`}
                     >
                       <span className="showtime-time">{fmtTime(show.start_time)} - {fmtTime(show.end_time)}</span>
@@ -205,18 +200,6 @@ export default function ShowSelectionPage({
             </section>
           ))}
         </div>
-      )}
-
-      {selectedShow && (
-        <section className="selection-summary-bar">
-          <div>
-            <strong>Selected Show:</strong> {data?.movie?.movie_name} • {selectedShow.theatre_name} • {selectedShow.screen_name} • {labelForDate(selectedShow.show_date)} • {fmtTime(selectedShow.start_time)}-{fmtTime(selectedShow.end_time)}
-          </div>
-          <div className="selection-summary-actions">
-            <button className="btn-secondary" type="button" onClick={() => onShowSelect(null, null)}>Clear Selection</button>
-            <button className="btn-primary" type="button" onClick={() => onContinueToSeats?.(selectedShow, data?.movie)}>Continue to Seats</button>
-          </div>
-        </section>
       )}
     </div>
   )

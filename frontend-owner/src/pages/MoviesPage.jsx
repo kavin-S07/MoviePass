@@ -3,6 +3,15 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { deleteMovie, fetchMovies } from '../services/movies'
 
+function formatDuration(minutes) {
+  if (!minutes && minutes !== 0) return 'N/A'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h && m) return `${h}h ${m}m`
+  if (h) return `${h}h`
+  return `${m}m`
+}
+
 export default function MoviesPage({ onNavigate }) {
   const { token } = useAuth()
 
@@ -16,7 +25,7 @@ export default function MoviesPage({ onNavigate }) {
     setError('')
     try {
       const data = await fetchMovies(token)
-      setMovies(data)
+      setMovies(Array.isArray(data) ? data : (data?.items || []))
     } catch (err) {
       setError(err.message || 'Could not load movies')
     } finally {
@@ -44,7 +53,7 @@ export default function MoviesPage({ onNavigate }) {
   }
 
   return (
-    <div className="dash">
+    <div className="dash movies-page owner-movies-page">
       <header className="dash-header">
         <div>
           <h1>Movies</h1>
@@ -65,64 +74,57 @@ export default function MoviesPage({ onNavigate }) {
           </button>
         </div>
       ) : (
-        <div className="theatre-grid">
-          {movies.map((movie) => (
-            <article key={movie.movie_id} className="theatre-card">
-              <div className="theatre-card-head">
-                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <div className="movie-grid">
+          {movies.map((movie) => {
+            const isComingSoon = movie.release_status === 'coming_soon'
+            const canBook = Boolean(movie.booking_available)
+            const statusLabel = isComingSoon ? 'Coming Soon' : canBook ? 'Book Now' : 'Now Showing'
+            const statusClass = isComingSoon ? 'badge-soon' : canBook ? 'badge-book' : 'badge-released'
+            return (
+              <article key={movie.movie_id} className="movie-card">
+                <button
+                  className="movie-card-poster-wrap"
+                  onClick={() => onNavigate('movie-details', movie.movie_id)}
+                  type="button"
+                  aria-label={`View details for ${movie.movie_name}`}
+                >
                   {movie.poster_url ? (
                     <img
                       src={movie.poster_url}
-                      alt={`${movie.movie_name} poster`}
-                      style={{ width: 64, height: 96, objectFit: 'cover', borderRadius: 8, background: '#f1f5f9' }}
-                      onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      alt={movie.movie_name}
+                      className="movie-card-poster"
+                      loading="lazy"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling?.classList?.remove('hidden'); }}
                     />
                   ) : (
-                    <div style={{ width: 64, height: 96, borderRadius: 8, background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#64748b' }}>
-                      No Poster
+                    <div className="movie-card-poster placeholder-poster">No Poster</div>
+                  )}
+                  {movie.poster_url ? <div className="movie-card-poster placeholder-poster hidden" aria-hidden="true">No Poster</div> : null}
+                  <span className={`status-badge ${statusClass}`}>{statusLabel}</span>
+                </button>
+                <div className="movie-card-body">
+                  <h3 className="movie-card-title" title={movie.movie_name}>{movie.movie_name}</h3>
+                  <p className="movie-card-meta">{movie.genre || 'Genre N/A'} • {movie.language || 'Language N/A'}</p>
+                  <p className="movie-card-meta">{formatDuration(movie.duration_minutes)} • {movie.certification || 'NR'}</p>
+                  <p className="movie-card-meta">Release: {movie.release_date || 'TBA'}</p>
+                  <div className="movie-card-actions">
+                    <button type="button" className="btn-secondary" onClick={() => onNavigate('movie-details', movie.movie_id)}>View</button>
+                    <button type="button" className="btn-secondary" onClick={() => onNavigate('edit-movie', movie.movie_id)}>Edit</button>
+                    <button type="button" className="btn-small danger" onClick={() => setConfirmId(movie.movie_id)}>Delete</button>
+                  </div>
+                  {confirmId === movie.movie_id && (
+                    <div className="confirm-bar owner-movie-confirm">
+                      <span>Delete this movie?</span>
+                      <div>
+                        <button type="button" className="btn-small" onClick={() => setConfirmId(null)}>Cancel</button>
+                        <button type="button" className="btn-small danger" onClick={() => handleDelete(movie.movie_id)}>Delete</button>
+                      </div>
                     </div>
                   )}
-                  <div>
-                    <h3 style={{ marginBottom: 4 }}>{movie.movie_name}</h3>
-                    <p className="muted" style={{ margin: 0 }}>
-                      {[movie.genre, movie.language, movie.certification].filter(Boolean).join(' • ') || 'No genre/language details'}
-                    </p>
-                  </div>
                 </div>
-              </div>
-
-              <dl className="theatre-meta">
-                <div>
-                  <dt>Duration</dt>
-                  <dd>{movie.duration_minutes ? `${movie.duration_minutes} min` : '—'}</dd>
-                </div>
-                <div>
-                  <dt>Release</dt>
-                  <dd>{movie.release_date || '—'}</dd>
-                </div>
-                <div>
-                  <dt>Director</dt>
-                  <dd>{movie.director_name || '—'}</dd>
-                </div>
-              </dl>
-
-              <div className="theatre-actions">
-                <button className="btn-small" onClick={() => onNavigate('movie-details', movie.movie_id)}>View</button>
-                <button className="btn-small" onClick={() => onNavigate('edit-movie', movie.movie_id)}>Edit</button>
-                <button className="btn-small danger" onClick={() => setConfirmId(movie.movie_id)}>Delete</button>
-              </div>
-
-              {confirmId === movie.movie_id && (
-                <div className="confirm-bar">
-                  <span>Delete this movie?</span>
-                  <div>
-                    <button className="btn-small" onClick={() => setConfirmId(null)}>Cancel</button>
-                    <button className="btn-small danger" onClick={() => handleDelete(movie.movie_id)}>Delete</button>
-                  </div>
-                </div>
-              )}
-            </article>
-          ))}
+              </article>
+            )
+          })}
         </div>
       )}
     </div>

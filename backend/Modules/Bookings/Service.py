@@ -1061,6 +1061,133 @@ def _build_ticket_info(db: Session, booking: Booking, show, screen, theatre, mov
     }
 
 
+CANCELLATION_POLICY_TEXT = (
+    "You can cancel eligible confirmed bookings before the show starts. "
+    "If payment was captured, a refund will be initiated according to payment/refund status."
+)
+
+
+def _show_datetime(show, field: str = "start_time"):
+    t = getattr(show, field, None) or getattr(show, "start_time", None)
+    return datetime.combine(show.show_date, t, tzinfo=timezone.utc)
+
+
+def _get_cancel_eligibility(booking, show, now: datetime | None = None):
+    now = now or utcnow()
+    display_status = _display_booking_status(booking.booking_status)
+    if booking.booking_status == "CANCELLED":
+        return False, "Booking is already cancelled."
+    if booking.booking_status in ("FAILED", "EXPIRED"):
+        return False, f"Booking is {display_status.lower()} and cannot be cancelled."
+    if booking.booking_status != "CONFIRMED":
+        return False, "Only confirmed bookings can be cancelled."
+    if _show_datetime(show, "start_time") <= now:
+        return False, "Cancellation is not available after the show has started."
+    return True, None
+
+
+def _cancel_booking_internal(db: Session, booking: Booking, show, now: datetime | None = None):
+    """
+    Idempotent internal cancellation for an owned booking.
+    Caller is responsible for transaction boundaries and notifications.
+    """
+    now = now or utcnow()
+    ticket = Repository.get_ticket_by_booking_id(db, booking.booking_id)
+    latest_payment = Repository.get_latest_payment_for_booking(db, booking.booking_id, for_update=True)
+
+    if booking.booking_status == "CANCELLED":
+        return {
+            "booking": booking,
+            "refund_status": "REFUNDED" if latest_payment and latest_payment.payment_status == "REFUNDED" else ("PENDING_OR_NOT_APPLICABLE" if latest_payment and latest_payment.payment_status == "CAPTURED" else None),
+            "idempotent": True,
+        }
+
+    seats = Repository.get_booking_seats_for_update(db, booking.booking_id)
+    for s in seats:
+        # Release seats so they become available again (active HELD/CONFIRMED blocks availability)
+        s.seat_status = "CANCELLED"
+
+    locks = db.query(SeatLock).filter(SeatLock.booking_id == booking.booking_id).with_for_update().all()
+    for lock in locks:
+        if lock.lock_status == "ACTIVE":
+            lock.lock_status = "RELEASED"
+            lock.released_at = now
+
+    if ticket:
+        ticket.ticket_status = "CANCELLED"
+
+    refund_status = None
+    if latest_payment:
+        if latest_payment.payment_status == "CAPTURED":
+            # Start refund flow (sandbox/internal state transition)
+            latest_payment.payment_status = "REFUNDED"
+            latest_payment.updated_at = now
+            refund_status = "REFUNDED"
+        elif latest_payment.payment_status == "REFUNDED":
+            refund_status = "REFUNDED"
+
+    booking.booking_status = "CANCELLED"
+    booking.cancelled_at = booking.cancelled_at or now
+    booking.updated_at = now
+    if show:
+        _sync_ticket_with_booking_state(booking, ticket, show, now=now)
+    return {"booking": booking, "refund_status": refund_status, "idempotent": False}
+
+
+def cancel_booking(db: Session, token: str, booking_id: int):
+    user = AuthService.get_authenticated_user(db, token)
+    _require_ticket_booker(user)
+    now = utcnow()
+    try:
+        Repository.expire_stale_locks(db, now=now)
+        ctx = Repository.get_booking_detail_context_for_user(db, booking_id, user.id)
+        if not ctx:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+        booking, show, screen, theatre, movie = ctx
+
+        # Lock booking row for idempotent/concurrent cancel handling
+        booking_locked = Repository.get_booking_by_id_for_user_for_update(db, booking.booking_id, user.id)
+        if not booking_locked:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+        booking = booking_locked
+
+        can_cancel, reason = _get_cancel_eligibility(booking, show, now=now)
+        if booking.booking_status == "CANCELLED":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Booking is already cancelled")
+        if not can_cancel:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=reason or "Booking cannot be cancelled")
+
+        result = _cancel_booking_internal(db, booking, show, now=now)
+        booking = result["booking"]
+        refund_status = result["refund_status"]
+        _notify(
+            db,
+            user_id=booking.user_id,
+            type="BOOKING_CANCELLED",
+            title="Booking cancelled",
+            message=f"Your booking {booking.booking_reference} has been cancelled." + (" Refund has been initiated." if refund_status else ""),
+            related_booking_id=booking.booking_id,
+        )
+        db.commit()
+        can_cancel_after, reason_after = _get_cancel_eligibility(booking, show, now=utcnow())
+        return {
+            "booking_id": booking.booking_id,
+            "booking_reference": booking.booking_reference,
+            "booking_status": _display_booking_status(booking.booking_status),
+            "refund_status": refund_status,
+            "message": "Booking cancelled successfully.",
+            "can_cancel": can_cancel_after,
+            "cancel_blocked_reason": reason_after,
+            "cancellation_policy": CANCELLATION_POLICY_TEXT,
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+
 def _booking_list_item(db: Session, booking, show, screen, theatre, movie):
     seats = Repository.get_booking_seats(db, booking.booking_id)
     ticket = Repository.get_ticket_by_booking_id(db, booking.booking_id)
@@ -1072,6 +1199,7 @@ def _booking_list_item(db: Session, booking, show, screen, theatre, movie):
         refund_status = "REFUNDED"
     elif booking.booking_status == "CANCELLED" and latest_payment and latest_payment.payment_status == "CAPTURED":
         refund_status = "PENDING_OR_NOT_APPLICABLE"
+    can_cancel, cancel_blocked_reason = _get_cancel_eligibility(booking, show)
     return {
         "booking_id": booking.booking_id,
         "booking_reference": booking.booking_reference,
@@ -1090,6 +1218,8 @@ def _booking_list_item(db: Session, booking, show, screen, theatre, movie):
         "ticket_status": ticket.ticket_status if ticket else None,
         "has_ticket": bool(ticket and booking.booking_status == "CONFIRMED" and ticket.ticket_status in ("ISSUED", "USED", "EXPIRED")),
         "refund_status": refund_status,
+        "can_cancel": can_cancel,
+        "cancel_blocked_reason": cancel_blocked_reason,
     }
 
 
@@ -1143,6 +1273,7 @@ def get_booking_details_for_owner(db: Session, token: str, booking_id: int):
         refund_status = None
         if latest_payment and latest_payment.payment_status == "REFUNDED":
             refund_status = "REFUNDED"
+        can_cancel, cancel_blocked_reason = _get_cancel_eligibility(booking, show)
         ticket_info = _build_ticket_info(db, booking, show, screen, theatre, movie, ticket) if (ticket and booking.booking_status == "CONFIRMED") else None
         res = {
             "booking_id": booking.booking_id,
@@ -1169,6 +1300,9 @@ def get_booking_details_for_owner(db: Session, token: str, booking_id: int):
             "payment_status": latest_payment.payment_status if latest_payment else None,
             "refund_status": refund_status,
             "ticket": ticket_info,
+            "can_cancel": can_cancel,
+            "cancel_blocked_reason": cancel_blocked_reason,
+            "cancellation_policy": CANCELLATION_POLICY_TEXT,
         }
         db.commit()
         return res

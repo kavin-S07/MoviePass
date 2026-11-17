@@ -232,9 +232,10 @@ export default function ScreenPreview({ theatreId, payload, onBack, onDone }) {
       <div className="asw-preview-layout">
 
         <section className="panel asw-card asw-preview-info" aria-label="Details and pricing">
-          <h2>Details</h2>
+          <div className="asw-info-col">
+            <h2>Details</h2>
 
-          <dl className="asw-kv">
+            <dl className="asw-kv">
             <div><dt>Theatre</dt><dd>{theatreLabel}</dd></div>
             <div><dt>Screen number</dt><dd>{payload.screen_number ?? '—'}</dd></div>
             <div>
@@ -242,8 +243,10 @@ export default function ScreenPreview({ theatreId, payload, onBack, onDone }) {
               <dd>{singlePrice ? `Single price, ${formatINR(payload.default_price)}` : `${categories.length} categories`}</dd>
             </div>
             <div><dt>Aisles</dt><dd>{vGaps.length} column, {hGaps.length} row</dd></div>
-          </dl>
+            </dl>
+          </div>
 
+          <div className="asw-info-col">
           <h2>Categories &amp; pricing</h2>
 
           <div className="table-wrap">
@@ -297,6 +300,7 @@ export default function ScreenPreview({ theatreId, payload, onBack, onDone }) {
           </div>
 
           <p className="asw-help">“Full house” is the ticket value if every bookable seat is sold once.</p>
+          </div>
         </section>
 
         <section className="panel asw-stage asw-preview-map" aria-label="Seat map">
@@ -350,6 +354,7 @@ export default function ScreenPreview({ theatreId, payload, onBack, onDone }) {
                   {hGapSet.has(r) && r < rows - 1 && <div className="asw-hgap" />}
                 </Fragment>
               ))}
+
 
               <div className="asw-screen asw-screen-bottom" aria-label="Movie screen position">
                 <div className="asw-screen-curve" />

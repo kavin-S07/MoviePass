@@ -8,6 +8,7 @@ from Modules.Bookings.Schema import (
     BookingDetailResponse,
     BookingStatusResponse,
     BookingSummaryResponse,
+    CancelBookingResponse,
     CreateBookingRequest,
     LockSeatsRequest,
     LockSeatsResponse,
@@ -108,6 +109,15 @@ def get_booking_details(
     token: str = Depends(get_token),
 ):
     return Service.get_booking_details_for_owner(db, token, booking_id)
+
+
+@router.post("/{booking_id}/cancel", response_model=CancelBookingResponse, status_code=status.HTTP_200_OK)
+def cancel_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(get_token),
+):
+    return Service.cancel_booking(db, token, booking_id)
 
 
 @router.get("/{booking_id}/ticket", response_model=TicketResponse, status_code=status.HTTP_200_OK)

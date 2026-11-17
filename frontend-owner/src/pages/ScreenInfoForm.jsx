@@ -86,7 +86,7 @@ function LayoutThumb({ rows, cols }) {
             <rect x="1.4" y="1.4" width="7.2" height="7.2" rx="1.8" fill="#3b82f6" />
           </pattern>
         </defs>
-        <rect x={w * 0.1} y="2" width={w * 0.8} height="4" rx="2" fill="#222" />
+        <rect x={w * 0.1} y="2" width={w * 0.8} height="4" rx="2" fill="#cbd5e1" />
         <rect x="0" y="14" width={w} height={h} fill="url(#asw-thumb-seat)" />
       </svg>
     </div>
