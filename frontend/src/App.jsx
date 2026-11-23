@@ -26,6 +26,7 @@ import {
 } from './services/booker'
 import {
   createBookingCheckout,
+  createPaymentOrder,
   fetchBookingStatus,
   fetchBookingSummary,
   fetchSandboxPaymentHelpers,
@@ -34,6 +35,7 @@ import {
   releaseShowSeatLocks,
   retryBookingPayment,
   verifyBookingPayment,
+  verifyRazorpayPayment,
 } from './services/bookings'
 
 import './App.css'
@@ -350,6 +352,8 @@ function CheckoutRoute() {
   const paymentVerifier = useCallback((bookingId, payload) => verifyBookingPayment(bookingId, payload, token), [token])
   const sandboxHelpersFetcher = useCallback((bookingId) => fetchSandboxPaymentHelpers(bookingId, token), [token])
   const bookingStatusFetcher = useCallback((bookingId) => fetchBookingStatus(bookingId, token), [token])
+  const paymentOrderCreator = useCallback((bookingId) => createPaymentOrder(bookingId, token), [token])
+  const razorpayVerifier = useCallback((payload) => verifyRazorpayPayment(payload, token), [token])
 
   const lockToken = flow.lockInfo?.lock_token
   const showId = flow.selectedShow?.show_id || flow.seatLayout?.show?.show_id
@@ -381,6 +385,8 @@ function CheckoutRoute() {
       createCheckout={checkoutCreator}
       verifyPayment={paymentVerifier}
       fetchSandboxHelpers={sandboxHelpersFetcher}
+      createPaymentOrder={paymentOrderCreator}
+      verifyRazorpayPayment={razorpayVerifier}
       onBackToSeats={() => showId ? navigate(`/shows/${showId}/seats`) : navigate('/movies')}
       onPaymentResult={handlePaymentResult}
     />

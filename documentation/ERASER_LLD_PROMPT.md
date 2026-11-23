@@ -24,7 +24,7 @@ MoviePass is a movie ticketing platform prototype with:
 - **Backend:** Python, FastAPI, SQLAlchemy, PostgreSQL (with JSONB and partial indexes used), JWT authentication (access token + DB-managed refresh session cookie), Pydantic schemas.
 - **Frontend 1 (Booker SPA):** React 19 + Vite + React Router (`frontend/`, port 5173) for ticket bookers.
 - **Frontend 2 (Owner/Admin SPA):** React 19 + Vite with custom path/history navigation (`frontend-owner/`, port 5174) for theatre owners and admins.
-- **API base URL (hardcoded in both frontends):** `http://localhost:8000`
+- **API base URL (hardcoded in both frontends):** `http://localhost:8001`
 
 ### User roles
 - `TICKET_BOOKER` (approved customer/booker)

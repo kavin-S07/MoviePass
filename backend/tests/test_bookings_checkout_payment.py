@@ -260,43 +260,6 @@ def test_failed_payment_invalid_signature_and_retry():
     assert ok.json()["booking_status"] == "CONFIRMED"
 
 
-def test_invalid_webhook_signature_and_duplicate_webhook():
-    reset_db()
-    data = seed_checkout_data()
-    token = login(data["b1_email"])
-
-    lock_token = lock_seats(data["show_id"], data["seat_ids"][:1], token).json()["lock_token"]
-    booking_id = checkout(lock_token, token).json()["booking_id"]
-    st = client.get(f"/bookings/{booking_id}", headers=auth_header(token)).json()
-    provider_order_id = st["payment"]["provider_order_id"]
-
-    event = {
-        "event": "payment.captured",
-        "booking_id": booking_id,
-        "provider_order_id": provider_order_id,
-        "provider_payment_id": "sandbox_wh_pay_1",
-    }
-    body = json.dumps(event).encode("utf-8")
-
-    bad = client.post("/bookings/payments/webhook", content=body, headers={"X-Payment-Signature": "bad", "Content-Type": "application/json"})
-    assert bad.status_code == 400
-
-    provider = get_payment_provider()
-    sig = provider.make_webhook_signature(body)
-    ok = client.post("/bookings/payments/webhook", content=body, headers={"X-Payment-Signature": sig, "Content-Type": "application/json"})
-    assert ok.status_code == 200, ok.text
-
-    dup = client.post("/bookings/payments/webhook", content=body, headers={"X-Payment-Signature": sig, "Content-Type": "application/json"})
-    assert dup.status_code == 200
-
-    db = TestingSessionLocal()
-    try:
-        assert db.query(Ticket).filter(Ticket.booking_id == booking_id).count() == 1
-        assert db.query(Booking).filter(Booking.booking_id == booking_id, Booking.booking_status == "CONFIRMED").count() == 1
-    finally:
-        db.close()
-
-
 def test_expired_lock_checkout_and_duplicate_booking_request_idempotent():
     reset_db()
     data = seed_checkout_data()

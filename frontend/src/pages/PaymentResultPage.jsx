@@ -31,7 +31,7 @@ export default function PaymentResultPage({
           <div className="summary-row"><span>Booking Reference</span><strong>{bookingRef || 'N/A'}</strong></div>
           <div className="summary-row"><span>Booking Status</span><strong>{bookingStatus?.booking_status || paymentResult?.result?.booking_status || 'N/A'}</strong></div>
           <div className="summary-row"><span>Payment Status</span><strong>{bookingStatus?.payment?.payment_status || paymentResult?.result?.payment_status || 'N/A'}</strong></div>
-          <div className="summary-row"><span>Provider</span><strong>{payment?.provider || paymentResult?.result?.provider || 'N/A'} {payment?.is_sandbox || paymentResult?.result?.is_sandbox ? '(Sandbox/Test)' : ''}</strong></div>
+          <div className="summary-row"><span>Provider</span><strong>{payment?.provider || paymentResult?.result?.provider || 'N/A'}{payment?.is_sandbox || paymentResult?.result?.is_sandbox ? ' (Sandbox/Test)' : ''}</strong></div>
           <div className="summary-row"><span>Amount</span><strong>{money(bookingStatus?.total_payable_amount ?? payment?.amount ?? paymentResult?.result?.amount, currency)}</strong></div>
           {bookingStatus?.seats?.length ? (
             <div className="summary-row"><span>Seats</span><strong>{bookingStatus.seats.map(s => s.seat_name).join(', ')}</strong></div>
@@ -51,7 +51,8 @@ export default function PaymentResultPage({
           <button className="btn-secondary" onClick={onGoHome}>Go to Home</button>
         </div>
 
-        {isSuccess && <p className="muted-note">Note: In sandbox/test mode, this confirmation is based on isolated sandbox signature verification and is not a real money transaction.</p>}
+        {isSuccess && (payment?.is_sandbox || paymentResult?.result?.is_sandbox) && <p className="muted-note">Note: In sandbox/test mode, this confirmation is based on isolated sandbox signature verification and is not a real money transaction.</p>}
+        {isSuccess && !(payment?.is_sandbox || paymentResult?.result?.is_sandbox) && <p className="muted-note">Payment was verified on the server. Booking is confirmed only after captured payment verification.</p>}
       </div>
     </div>
   )

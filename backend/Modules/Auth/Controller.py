@@ -21,6 +21,7 @@ from Modules.Auth.Schema import (
 )
 from Modules.Auth.Social import PROVIDERS, frontend_redirect
 from config.database import get_db
+from config.rate_limit import AUTH_RATE_LIMIT, limiter
 
 
 router = APIRouter(
@@ -35,6 +36,7 @@ router = APIRouter(
     response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED
 )
+@limiter.limit(AUTH_RATE_LIMIT, override_defaults=True)
 def signup(
     user_data: UserSignup,
     request: Request,
@@ -56,6 +58,7 @@ def signup(
     response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED
 )
+@limiter.limit(AUTH_RATE_LIMIT, override_defaults=True)
 def signup_owner(
     user_data: UserSignup,
     request: Request,
@@ -77,6 +80,7 @@ def signup_owner(
     response_model=AuthResponse,
     status_code=status.HTTP_200_OK
 )
+@limiter.limit(AUTH_RATE_LIMIT, override_defaults=True)
 def login(
     login_data: UserLogin,
     request: Request,

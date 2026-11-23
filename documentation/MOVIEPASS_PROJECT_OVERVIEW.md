@@ -28,7 +28,7 @@ MoviePass is a movie ticketing platform prototype with three primary user roles:
 
 ### Known gaps / prototype characteristics (from code)
 - No live payment gateway integration; sandbox provider only (`Modules/Bookings/Payments.py` fallback to sandbox).
-- Frontend API base URL is hardcoded to `http://localhost:8000` in both SPAs (`frontend/src/services/api.js`, `frontend-owner/src/services/api.js`).
+- Frontend API base URL is hardcoded to `http://localhost:8001` in both SPAs (`frontend/src/services/api.js`, `frontend-owner/src/services/api.js`).
 - Booking/payment frontend uses sandbox helper endpoint and manual signature/payment-id verification flow (`frontend/src/pages/CheckoutPage.jsx`).
 - Some owner/admin UI pages are present but backend support may be limited to read/list/create patterns (e.g. no movie delete UI? owner has delete; no show edit/delete endpoints implemented in backend controller/service/repo). README notes parity placeholders exist.
 - `frontend-owner` uses custom in-memory/history navigation in `App.jsx` (not React Router), while `frontend` uses `react-router-dom`.
@@ -160,7 +160,7 @@ MoviePass is a movie ticketing platform prototype with three primary user roles:
 
 ### 3.4 API inventory (from controllers)
 
-> Base URL: backend FastAPI app (default local `http://localhost:8000`). All protected endpoints require valid access token unless exempted by middleware; dependency-level token extraction is used in controllers.
+> Base URL: backend FastAPI app (default local `http://localhost:8001`). All protected endpoints require valid access token unless exempted by middleware; dependency-level token extraction is used in controllers.
 
 #### Root/health
 | Method | Path | Auth/Role | Purpose | Request | Response |
@@ -510,7 +510,7 @@ MoviePass is a movie ticketing platform prototype with three primary user roles:
 - **Implemented admin features (evident):** overview, owner approvals page/services, users/theatres/movies/shows admin list pages/services.
 
 ### 5.3 Frontend-backend communication patterns
-- Both apps call the same backend origin (`http://localhost:8000`) with JSON payloads.
+- Both apps call the same backend origin (`http://localhost:8001`) with JSON payloads.
 - Access token attached as `Authorization: Bearer <token>` by `apiFetch`; refresh uses cookie-auth POST `/auth/refresh` with `credentials: 'include'`.
 - Booker booking flow passes `lock_token` between seat lock, summary, checkout, and payment verification steps.
 - Booker ticket UI uses `TicketView` + QR utility; ticket retrieval/download endpoints consumed.
@@ -673,7 +673,7 @@ MoviePass is a movie ticketing platform prototype with three primary user roles:
 ## 8. Important Technical Details
 
 - **Tech stack:** FastAPI, SQLAlchemy, PostgreSQL dialect features (JSONB, partial unique indexes), Pydantic v2, python-jose, pwdlib, Authlib, Starlette SessionMiddleware; React 19, Vite 8, React Router (booker only).
-- **Ports/origins:** backend `:8000`; booker frontend `:5173`; owner frontend `:5174`; hardcoded API base URLs in frontend service clients.
+- **Ports/origins:** backend `:8001`; booker frontend `:5173`; owner frontend `:5174`; hardcoded API base URLs in frontend service clients.
 - **Auth token strategy:** short-lived access JWT + HttpOnly refresh cookie session (DB-backed, rotated). Frontend stores access token in memory only.
 - **CSRF mitigation for cookie refresh/logout:** origin/referer allowlist checks in auth service for cookie-authenticated endpoints.
 - **Seat/booking consistency:** DB constraints (partial uniques/checks) + service/repository transactional logic and locking patterns to prevent double booking/active duplicate locks.
