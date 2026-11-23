@@ -8,6 +8,7 @@ export default function SignupPage() {
   const { signup, landingError } = useAuth()
   const [form, setForm] = useState({ name: '', email: '', password: '', phone_no: '' })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   function change(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -15,11 +16,15 @@ export default function SignupPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (loading) return
     setError('')
+    setLoading(true)
     try {
       await signup(form)
     } catch (err) {
-      setError(err.message || 'Signup failed')
+      setError(err.message || 'Unable to signup. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -34,7 +39,7 @@ export default function SignupPage() {
         <input name="email" type="email" placeholder="Email" value={form.email} onChange={change} />
         <input name="password" type="password" placeholder="Password" value={form.password} onChange={change} />
         {error && <p className="error">{error}</p>}
-        <button type="submit">Signup</button>
+        <button type="submit" disabled={loading}>{loading ? 'Signing up...' : 'Signup'}</button>
       </form>
       <SocialButtons />
       <p className="switch">

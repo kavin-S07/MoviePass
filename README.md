@@ -22,7 +22,7 @@ This repository contains the implemented/parity modules and placeholder/routed U
   - `FRONTEND_URL` (default `http://localhost:5173`), `OWNER_FRONTEND_URL` (default `http://localhost:5174`)
   - `ENVIRONMENT` (`development`/`production`, affects refresh cookie security behavior)
   - Google OAuth (optional, for social login): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (and callback/redirect URIs as configured in your Google client; backend uses app callback route `GET /auth/{provider}/callback`, named `social_callback`)
-- Frontend API base URL is currently hardcoded to `http://localhost:8000` in both SPAs.
+- Frontend API base URL is currently hardcoded to `http://localhost:8001` in both SPAs.
 
 ## Backend (FastAPI)
 From `gmoviepass/backend`:
@@ -36,7 +36,7 @@ pip install -r requirements.txt
 Run the API (ensure required env vars are set, especially DB/JWT secrets):
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 - Health: `GET /` → `{ "message": "MoviePass API is running" }`

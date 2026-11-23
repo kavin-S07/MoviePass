@@ -450,16 +450,44 @@ def get_booking_summary(db: Session, token: str, lock_token: str):
         raise
 
 
-def _payment_to_info(payment: Payment, provider_is_sandbox: bool):
+def _payment_to_info(payment: Payment, provider_is_sandbox: bool, key_id: str | None = None):
+    meta = payment.metadata_json if isinstance(payment.metadata_json, dict) else {}
+    resolved_key = key_id or meta.get("key_id") or meta.get("razorpay_key_id")
     return {
         "payment_id": payment.payment_id,
         "provider": payment.provider,
         "provider_order_id": payment.provider_order_id,
+        "provider_payment_id": payment.provider_payment_id,
+        "key_id": resolved_key,
         "amount": _money(payment.amount),
         "currency": payment.currency,
         "payment_status": payment.payment_status,
         "is_sandbox": provider_is_sandbox,
     }
+
+
+def _apply_provider_order_fields(payment: Payment, provider, order, *, amount, currency, notes=None):
+    payment.provider = order.provider
+    payment.payment_provider = order.provider
+    payment.provider_order_id = order.provider_order_id
+    payment.razorpay_order_id = order.provider_order_id if order.provider == "razorpay" else payment.razorpay_order_id
+    payment.amount = amount
+    payment.currency = currency
+    meta = order.metadata if isinstance(order.metadata, dict) else {}
+    meta = {**meta}
+    if getattr(order, "key_id", None):
+        meta["key_id"] = order.key_id
+    if notes:
+        meta.setdefault("notes", notes)
+    payment.metadata_json = meta
+
+
+def _apply_provider_payment_id(payment: Payment, provider_payment_id: str | None):
+    if not provider_payment_id:
+        return
+    payment.provider_payment_id = provider_payment_id
+    if (payment.provider or payment.payment_provider) == "razorpay" or str(provider_payment_id).startswith("pay_"):
+        payment.razorpay_payment_id = provider_payment_id
 
 
 def _ensure_tickets_for_confirmed_booking(db: Session, booking: Booking):
@@ -547,7 +575,7 @@ def checkout_create_booking(db: Session, token: str, payload):
                 "total_payable_amount": _money(booking.total_amount),
                 "currency": booking.currency,
                 "seats": [{"seat_id": s.seat_id, "seat_name": s.seat_name_snapshot, "category_name": s.category_name_snapshot, "price": _money(s.seat_price)} for s in seats],
-                "payment": _payment_to_info(latest_payment, provider.is_sandbox),
+                "payment": _payment_to_info(latest_payment, provider.is_sandbox, getattr(provider, 'key_id', None)),
             }
 
         # Re-validate show/seat availability and ownership/locks under transaction
@@ -592,16 +620,20 @@ def checkout_create_booking(db: Session, token: str, payload):
         reusable_statuses = {"INITIATED", "PENDING", "FAILED"}
         if payment and payment.payment_status in reusable_statuses and Decimal(str(payment.amount)) == total and payment.currency == (booking.currency or "INR"):
             # keep existing provider order for retry/resume
-            if not payment.provider_order_id:
+            if not payment.provider_order_id or (getattr(provider, "provider_name", "") == "razorpay" and not str(payment.provider_order_id).startswith("order_")):
                 order = provider.create_order(
                     booking_reference=booking.booking_reference,
                     amount=total,
                     currency=booking.currency or "INR",
-                    notes={"booking_id": booking.booking_id, "user_id": booking.user_id, "sandbox": provider.is_sandbox},
+                    notes={"booking_id": str(booking.booking_id), "user_id": str(booking.user_id), "booking_reference": booking.booking_reference},
                 )
-                payment.provider = order.provider
-                payment.provider_order_id = order.provider_order_id
-                payment.metadata_json = order.metadata
+                _apply_provider_order_fields(payment, provider, order, amount=total, currency=booking.currency or "INR")
+            else:
+                # Ensure key_id present for frontend checkout when using Razorpay.
+                meta = payment.metadata_json if isinstance(payment.metadata_json, dict) else {}
+                if getattr(provider, "key_id", None) and meta.get("key_id") != provider.key_id:
+                    meta = {**meta, "key_id": provider.key_id}
+                    payment.metadata_json = meta
             payment.payment_status = "INITIATED"
             payment.failure_reason = None
             payment.updated_at = now
@@ -613,19 +645,21 @@ def checkout_create_booking(db: Session, token: str, payload):
                 booking_reference=booking.booking_reference,
                 amount=total,
                 currency=booking.currency or "INR",
-                notes={"booking_id": booking.booking_id, "user_id": booking.user_id, "sandbox": provider.is_sandbox},
+                notes={"booking_id": str(booking.booking_id), "user_id": str(booking.user_id), "booking_reference": booking.booking_reference},
             )
             payment = Payment(
                 booking_id=booking.booking_id,
                 user_id=booking.user_id,
                 provider=order.provider,
+                payment_provider=order.provider,
                 provider_order_id=order.provider_order_id,
+                razorpay_order_id=order.provider_order_id if order.provider == "razorpay" else None,
                 provider_payment_id=None,
                 amount=total,
                 currency=booking.currency or "INR",
                 payment_status="INITIATED",
-                idempotency_key=f"booking:{booking.booking_id}",
-                metadata_json=order.metadata,
+                idempotency_key=f"booking:{booking.booking_id}:{secrets.token_hex(4)}",
+                metadata_json={**(order.metadata or {}), **({"key_id": order.key_id} if getattr(order, "key_id", None) else {})},
             )
             Repository.create_payment(db, payment)
 
@@ -643,7 +677,7 @@ def checkout_create_booking(db: Session, token: str, payload):
             "total_payable_amount": _money(total),
             "currency": booking.currency or "INR",
             "seats": [{"seat_id": s.seat_id, "seat_name": s.seat_name_snapshot, "category_name": s.category_name_snapshot, "price": _money(s.seat_price)} for s in seats],
-            "payment": _payment_to_info(payment, provider.is_sandbox),
+            "payment": _payment_to_info(payment, provider.is_sandbox, getattr(provider, 'key_id', None)),
         }
     except HTTPException:
         db.rollback()
@@ -677,7 +711,7 @@ def get_booking_status(db: Session, token: str, booking_id: int):
             "currency": booking.currency or "INR",
             "lock_expires_at": booking.lock_expires_at,
             "confirmed_at": booking.confirmed_at,
-            "payment": _payment_to_info(payment, provider.is_sandbox) if payment else None,
+            "payment": _payment_to_info(payment, provider.is_sandbox, getattr(provider, 'key_id', None)) if payment else None,
             "seats": [{"seat_id": s.seat_id, "seat_name": s.seat_name_snapshot, "category_name": s.category_name_snapshot, "price": _money(s.seat_price)} for s in seats],
         }
     except HTTPException:
@@ -701,6 +735,13 @@ def verify_payment(db: Session, token: str, booking_id: int, payload):
         payment = Repository.get_latest_payment_for_booking(db, booking.booking_id, for_update=True)
         if not payment or not payment.provider_order_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment order not found for this booking")
+
+        # Normalize request fields (supports legacy sandbox and Razorpay payloads)
+        req_order_id = (getattr(payload, "razorpay_order_id", None) or payment.provider_order_id or "").strip()
+        req_payment_id = (getattr(payload, "razorpay_payment_id", None) or getattr(payload, "provider_payment_id", None) or "").strip()
+        req_signature = (getattr(payload, "razorpay_signature", None) or getattr(payload, "signature", None) or "").strip()
+        if not req_payment_id or not req_signature:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="provider_payment_id/razorpay_payment_id and signature/razorpay_signature are required")
 
         # Idempotency / duplicate protection
         if booking.booking_status == "CONFIRMED" and payment.payment_status in ("CAPTURED", "AUTHORIZED"):
@@ -729,21 +770,25 @@ def verify_payment(db: Session, token: str, booking_id: int, payload):
             db.commit()
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Seat lock expired. Please select seats again.")
 
+        # Ensure the submitted order belongs to this booking/payment
+        if req_order_id and payment.provider_order_id and req_order_id != payment.provider_order_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment order does not match booking")
+
         # Duplicate provider payment id protection
-        existing_pp = Repository.get_payment_by_provider_payment_id(db, payload.provider_payment_id)
+        existing_pp = Repository.get_payment_by_provider_payment_id(db, req_payment_id)
         if existing_pp and existing_pp.payment_id != payment.payment_id:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Duplicate payment identifier detected")
 
         verified = provider.verify_payment_signature(
             provider_order_id=payment.provider_order_id,
-            provider_payment_id=payload.provider_payment_id,
-            signature=payload.signature,
+            provider_payment_id=req_payment_id,
+            signature=req_signature,
         )
         if not verified:
             payment.payment_status = "FAILED"
             booking.booking_status = "FAILED"
             payment.failure_reason = "Invalid payment signature"
-            payment.provider_payment_id = payload.provider_payment_id
+            _apply_provider_payment_id(payment, req_payment_id)
             payment.updated_at = now
             booking.updated_at = now
             _notify(db, user_id=booking.user_id, type="PAYMENT_FAILED", title="Payment failed", message=f"Payment verification failed for booking {booking.booking_reference}. Please retry if eligible.", related_booking_id=booking.booking_id)
@@ -763,10 +808,53 @@ def verify_payment(db: Session, token: str, booking_id: int, payload):
                 "message": "Payment signature verification failed.",
             }
 
+        # For real providers (Razorpay), verify actual payment status server-side.
+        provider_payment = provider.fetch_payment(req_payment_id)
+        if provider.provider_name == "razorpay":
+            provider_status = str((provider_payment or {}).get("status") or "").lower()
+            provider_order = str((provider_payment or {}).get("order_id") or "")
+            provider_amount = (provider_payment or {}).get("amount")
+            if not provider_payment:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to verify payment status with provider")
+            if provider_order and provider_order != payment.provider_order_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provider payment does not belong to this order")
+            if provider_amount is not None:
+                try:
+                    expected_paise = int((_money_decimal(payment.amount) * Decimal("100")).to_integral_value())
+                    if int(provider_amount) != expected_paise:
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment amount mismatch")
+                except HTTPException:
+                    raise
+                except Exception:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payment amount from provider")
+            if provider_status != "captured":
+                payment.payment_status = "FAILED" if provider_status in {"failed", "cancelled"} else "PENDING"
+                payment.failure_reason = f"Payment not captured (provider status: {provider_status or 'unknown'})"
+                _apply_provider_payment_id(payment, req_payment_id)
+                payment.updated_at = now
+                booking.updated_at = now
+                db.commit()
+                return {
+                    "booking_id": booking.booking_id,
+                    "booking_reference": booking.booking_reference,
+                    "booking_status": _display_booking_status(booking.booking_status),
+                    "payment_status": payment.payment_status,
+                    "payment_id": payment.payment_id,
+                    "provider": payment.provider,
+                    "provider_order_id": payment.provider_order_id,
+                    "provider_payment_id": payment.provider_payment_id,
+                    "amount": _money(payment.amount),
+                    "currency": payment.currency,
+                    "is_sandbox": provider.is_sandbox,
+                    "message": "Payment signature verified, but payment is not captured yet.",
+                }
+
         # Mark payment verified evidence received; confirm booking transactionally
-        payment.provider_payment_id = payload.provider_payment_id
+        _apply_provider_payment_id(payment, req_payment_id)
         payment.payment_status = "AUTHORIZED"
         payment.updated_at = now
+        if isinstance(payment.metadata_json, dict):
+            payment.metadata_json = {**payment.metadata_json, "verified_via": "api_verify"}
         _confirm_booking_from_verified_payment(db, booking, payment, now)
         db.commit()
         return {
@@ -781,7 +869,7 @@ def verify_payment(db: Session, token: str, booking_id: int, payload):
             "amount": _money(payment.amount),
             "currency": payment.currency,
             "is_sandbox": provider.is_sandbox,
-            "message": "Payment verified and booking confirmed (sandbox/test verification).",
+            "message": "Payment verified and booking confirmed.",
         }
     except HTTPException:
         db.rollback()
@@ -791,74 +879,26 @@ def verify_payment(db: Session, token: str, booking_id: int, payload):
         raise
 
 
-def handle_payment_webhook(db: Session, payload_body: bytes, signature: str | None):
-    provider = get_payment_provider()
-    now = utcnow()
-    try:
-        if not provider.verify_webhook_signature(payload_body=payload_body, signature=signature):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature")
+def verify_payment_by_payload(db: Session, token: str, payload):
+    """Verify payment using payload (supports /payments/verify without booking_id in path)."""
+    user = AuthService.get_authenticated_user(db, token)
+    _require_ticket_booker(user)
+    order_id = (getattr(payload, "razorpay_order_id", None) or "").strip()
+    payment_id = (getattr(payload, "razorpay_payment_id", None) or getattr(payload, "provider_payment_id", None) or "").strip()
 
-        event = provider.parse_webhook_event(payload_body=payload_body)
-        # Expected sandbox/webhook payload shape (adapter can be extended for real providers):
-        # { "event": "payment.captured|payment.failed", "booking_id": ..., "provider_order_id": "...", "provider_payment_id": "...", "status": "..." }
-        booking_id = event.get("booking_id")
-        provider_order_id = event.get("provider_order_id")
-        provider_payment_id = event.get("provider_payment_id")
-        event_type = (event.get("event") or event.get("status") or "").lower()
+    payment = None
+    if order_id:
+        payment = Repository.get_payment_by_provider_order_id(db, order_id)
+    if not payment and payment_id:
+        payment = Repository.get_payment_by_provider_payment_id(db, payment_id)
 
-        payment = None
-        if provider_order_id:
-            payment = Repository.get_payment_by_provider_order_id(db, provider_order_id)
-        if not payment and booking_id:
-            payment = Repository.get_latest_payment_for_booking(db, int(booking_id), for_update=True)
-        if not payment:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment record not found for webhook")
+    if not payment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment record not found for verification")
 
-        booking = Repository.get_booking_by_id_for_update(db, payment.booking_id)
-        if not booking:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found for webhook")
+    if payment.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this payment")
 
-        # Duplicate webhook protection / idempotency
-        if provider_payment_id:
-            existing_pp = Repository.get_payment_by_provider_payment_id(db, provider_payment_id)
-            if existing_pp and existing_pp.payment_id != payment.payment_id:
-                db.commit()
-                return {"status": "ignored", "reason": "duplicate_provider_payment_id"}
-            if payment.provider_payment_id == provider_payment_id and payment.payment_status in ("CAPTURED", "AUTHORIZED") and booking.booking_status == "CONFIRMED":
-                db.commit()
-                return {"status": "ok", "idempotent": True, "booking_status": _display_booking_status(booking.booking_status)}
-
-        if "fail" in event_type:
-            payment.payment_status = "FAILED"
-            payment.failure_reason = event.get("reason") or "Payment failed (webhook)"
-            if provider_payment_id:
-                payment.provider_payment_id = provider_payment_id
-            if booking.booking_status != "CONFIRMED":
-                booking.booking_status = "FAILED"
-            payment.updated_at = now
-            booking.updated_at = now
-            _notify(db, user_id=booking.user_id, type="PAYMENT_FAILED", title="Payment failed", message=f"Payment failed for booking {booking.booking_reference}.", related_booking_id=booking.booking_id)
-            db.commit()
-            return {"status": "ok", "booking_status": _display_booking_status(booking.booking_status), "payment_status": payment.payment_status}
-
-        # Treat captured/authorized/success events as verified evidence (signature already verified above)
-        if any(k in event_type for k in ["captured", "authorized", "success", "paid"]) or event.get("verified") is True:
-            if provider_payment_id:
-                payment.provider_payment_id = provider_payment_id
-            payment.payment_status = "AUTHORIZED" if "authorized" in event_type else "CAPTURED"
-            payment.updated_at = now
-            _confirm_booking_from_verified_payment(db, booking, payment, now)
-            db.commit()
-            return {"status": "ok", "idempotent": False, "booking_status": _display_booking_status(booking.booking_status), "payment_status": payment.payment_status}
-
-        db.commit()
-        return {"status": "ignored", "reason": "unhandled_event"}
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception:
-        db.rollback()
-        raise
+    return verify_payment(db, token, payment.booking_id, payload)
 
 
 def retry_payment(db: Session, token: str, booking_id: int):
@@ -956,7 +996,7 @@ def get_sandbox_payment_helpers(db: Session, token: str, booking_id: int):
     user = AuthService.get_authenticated_user(db, token)
     _require_ticket_booker(user)
     provider = get_payment_provider()
-    if not getattr(provider, "is_sandbox", False):
+    if getattr(provider, "provider_name", "") != "sandbox":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sandbox helpers are only available in sandbox/test mode")
 
     booking = Repository.get_booking_by_id_for_user_for_update(db, booking_id, user.id)
@@ -975,9 +1015,153 @@ def get_sandbox_payment_helpers(db: Session, token: str, booking_id: int):
         "provider_order_id": payment.provider_order_id,
         "sandbox_payment_id": sandbox_payment_id,
         "sandbox_signature": sandbox_signature,
-        "webhook_signature_for_event": None,
         "warning": "Sandbox/test helper only. This does not represent a real successful transaction and does not confirm booking by itself.",
     }
+
+
+def create_payment_order_for_booking(db: Session, token: str, booking_id: int):
+    """Create/reuse a provider payment order for an authenticated user's booking."""
+    user = AuthService.get_authenticated_user(db, token)
+    _require_ticket_booker(user)
+    provider = get_payment_provider()
+    now = utcnow()
+
+    try:
+        Repository.expire_stale_locks(db)
+        booking = Repository.get_booking_by_id_for_user_for_update(db, booking_id, user.id)
+        if not booking:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Booking not found")
+
+        if booking.booking_status == "CONFIRMED":
+            payment = Repository.get_latest_payment_for_booking(db, booking.booking_id, for_update=True)
+            if not payment:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Confirmed booking has no payment record")
+            db.commit()
+            return {
+                "success": True,
+                "message": "Booking already confirmed",
+                "data": {
+                    "key_id": getattr(provider, "key_id", None),
+                    "order_id": payment.provider_order_id,
+                    "amount": int((_money_decimal(payment.amount) * Decimal("100")).to_integral_value()),
+                    "currency": payment.currency or "INR",
+                    "booking_id": booking.booking_id,
+                    "booking_reference": booking.booking_reference,
+                    "payment_id": payment.payment_id,
+                    "provider": payment.provider,
+                    "is_sandbox": bool(getattr(provider, "is_sandbox", False)),
+                },
+            }
+
+        if booking.booking_status in ("CANCELLED", "EXPIRED"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking is not eligible for payment")
+
+        if booking.lock_expires_at and booking.lock_expires_at <= now:
+            booking.booking_status = "EXPIRED"
+            booking.updated_at = now
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Seat lock expired. Please select seats again.")
+
+        # Validate booking seats still held for this booking
+        seats = Repository.get_booking_seats_for_update(db, booking.booking_id)
+        if not seats:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Booking has no seats")
+
+        active_lock_rows = db.query(SeatLock).filter(
+            SeatLock.booking_id == booking.booking_id,
+            SeatLock.user_id == user.id,
+            SeatLock.lock_status == "ACTIVE",
+            SeatLock.expires_at > now,
+        ).with_for_update().all()
+        if not active_lock_rows:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Seat lock is invalid or expired")
+
+        locked_seat_ids = {l.seat_id for l in active_lock_rows}
+        booking_seat_ids = [s.seat_id for s in seats]
+        if any(sid not in locked_seat_ids for sid in booking_seat_ids):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Seat lock does not match booking seats")
+
+        conflicts = (
+            db.query(BookingSeat)
+            .filter(
+                BookingSeat.show_id == booking.show_id,
+                BookingSeat.seat_id.in_(booking_seat_ids),
+                BookingSeat.seat_status.in_(["HELD", "CONFIRMED"]),
+                BookingSeat.booking_id != booking.booking_id,
+            )
+            .with_for_update()
+            .all()
+        )
+        if conflicts:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Selected seats are no longer available")
+
+        subtotal = sum((Decimal(str(s.seat_price)) for s in seats), Decimal("0.00"))
+        subtotal, tax, fee, total = _calculate_amounts(subtotal, len(seats))
+        booking.subtotal, booking.tax_amount, booking.convenience_fee, booking.total_amount = subtotal, tax, fee, total
+        booking.booking_status = "PAYMENT_PENDING"
+        booking.updated_at = now
+
+        payment = Repository.get_latest_payment_for_booking(db, booking.booking_id, for_update=True)
+        reusable_statuses = {"INITIATED", "PENDING", "FAILED", "CREATED"}
+        if payment and payment.payment_status in reusable_statuses and Decimal(str(payment.amount)) == total and payment.currency == (booking.currency or "INR") and payment.provider_order_id:
+            if getattr(provider, "key_id", None):
+                meta = payment.metadata_json if isinstance(payment.metadata_json, dict) else {}
+                if meta.get("key_id") != provider.key_id:
+                    payment.metadata_json = {**meta, "key_id": provider.key_id}
+            payment.payment_status = "INITIATED"
+            payment.failure_reason = None
+            payment.updated_at = now
+        else:
+            order = provider.create_order(
+                booking_reference=booking.booking_reference,
+                amount=total,
+                currency=booking.currency or "INR",
+                notes={"booking_id": str(booking.booking_id), "user_id": str(booking.user_id), "booking_reference": booking.booking_reference},
+            )
+            if payment and payment.payment_status in reusable_statuses:
+                _apply_provider_order_fields(payment, provider, order, amount=total, currency=booking.currency or "INR")
+                payment.payment_status = "INITIATED"
+                payment.failure_reason = None
+                _apply_provider_payment_id(payment, None)
+                payment.updated_at = now
+            else:
+                payment = Payment(
+                    booking_id=booking.booking_id,
+                    user_id=booking.user_id,
+                    provider=order.provider,
+                    payment_provider=order.provider,
+                    provider_order_id=order.provider_order_id,
+                    razorpay_order_id=order.provider_order_id if order.provider == "razorpay" else None,
+                    amount=total,
+                    currency=booking.currency or "INR",
+                    payment_status="INITIATED",
+                    idempotency_key=f"booking:{booking.booking_id}:order:{secrets.token_hex(4)}",
+                    metadata_json={**(order.metadata or {}), **({"key_id": order.key_id} if getattr(order, "key_id", None) else {})},
+                )
+                Repository.create_payment(db, payment)
+
+        db.commit()
+        return {
+            "success": True,
+            "message": "Payment order created",
+            "data": {
+                "key_id": getattr(provider, "key_id", None) or (payment.metadata_json or {}).get("key_id") if isinstance(payment.metadata_json, dict) else getattr(provider, "key_id", None),
+                "order_id": payment.provider_order_id,
+                "amount": int((_money_decimal(payment.amount) * Decimal("100")).to_integral_value()),
+                "currency": payment.currency or "INR",
+                "booking_id": booking.booking_id,
+                "booking_reference": booking.booking_reference,
+                "payment_id": payment.payment_id,
+                "provider": payment.provider,
+                "is_sandbox": bool(getattr(provider, "is_sandbox", False)),
+            },
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 

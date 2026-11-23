@@ -1,7 +1,26 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 function fmtTime(t) { return t ? String(t).slice(0, 5) : '' }
 function money(n, currency = 'INR') { return `${currency === 'INR' ? '₹' : ''}${Number(n || 0).toFixed(2)}` }
+
+function loadRazorpayScript() {
+  if (typeof window !== 'undefined' && window.Razorpay) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    const existing = document.querySelector('script[data-razorpay-checkout="true"]')
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true))
+      existing.addEventListener('error', () => resolve(false))
+      return
+    }
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.async = true
+    script.dataset.razorpayCheckout = 'true'
+    script.onload = () => resolve(true)
+    script.onerror = () => resolve(false)
+    document.body.appendChild(script)
+  })
+}
 
 export default function CheckoutPage({
   lockToken,
@@ -11,6 +30,8 @@ export default function CheckoutPage({
   createCheckout,
   verifyPayment,
   fetchSandboxHelpers,
+  createPaymentOrder,
+  verifyRazorpayPayment,
   onBackToSeats,
   onPaymentResult,
 }) {
@@ -22,6 +43,7 @@ export default function CheckoutPage({
   const [paymentError, setPaymentError] = useState('')
   const [sandboxHelpers, setSandboxHelpers] = useState(null)
   const [sandboxInputs, setSandboxInputs] = useState({ provider_payment_id: '', signature: '' })
+  const paymentInFlightRef = useRef(false)
 
   async function loadSummary() {
     if (!lockToken) return
@@ -42,13 +64,12 @@ export default function CheckoutPage({
   const currency = summary?.currency || 'INR'
 
   async function handleCreateCheckout() {
-    if (!lockToken || processing || checkoutData) return
+    if (!lockToken || processing || checkoutData || paymentInFlightRef.current) return
     setProcessing(true)
     setPaymentError('')
     try {
       const data = await createCheckout(lockToken)
       setCheckoutData(data)
-      // prepare sandbox helpers if sandbox
       if (data?.payment?.is_sandbox && data?.booking_id) {
         try {
           const helpers = await fetchSandboxHelpers(data.booking_id)
@@ -65,12 +86,13 @@ export default function CheckoutPage({
     }
   }
 
-  async function handleVerifyPayment() {
-    if (!checkoutData?.booking_id || processing) return
+  async function handleVerifySandboxPayment() {
+    if (!checkoutData?.booking_id || processing || paymentInFlightRef.current) return
     if (!sandboxInputs.provider_payment_id || !sandboxInputs.signature) {
       setPaymentError('Provider payment ID and signature are required to verify payment.')
       return
     }
+    paymentInFlightRef.current = true
     setProcessing(true)
     setPaymentError('')
     try {
@@ -84,10 +106,101 @@ export default function CheckoutPage({
         onPaymentResult?.({ status: 'failed', bookingId: checkoutData.booking_id, result: res, message: res.message || 'Payment verification failed.' })
       }
     } catch (err) {
-      setPaymentError(err.message || 'Payment verification failed')
-      onPaymentResult?.({ status: 'failed', bookingId: checkoutData.booking_id, message: err.message || 'Payment verification failed' })
+      const msg = err.message || 'Payment verification failed'
+      setPaymentError(msg)
+      onPaymentResult?.({ status: 'failed', bookingId: checkoutData.booking_id, message: msg })
     } finally {
       setProcessing(false)
+      paymentInFlightRef.current = false
+    }
+  }
+
+  async function handleRazorpayPayNow() {
+    if (!checkoutData?.booking_id || processing || paymentInFlightRef.current) return
+    if (typeof createPaymentOrder !== 'function') {
+      setPaymentError('Payment order service is unavailable. Please refresh and try again.')
+      return
+    }
+
+    paymentInFlightRef.current = true
+    setProcessing(true)
+    setPaymentError('')
+
+    try {
+      const orderResp = await createPaymentOrder(checkoutData.booking_id)
+      const orderData = orderResp?.data || orderResp
+      const scriptOk = await loadRazorpayScript()
+      if (!scriptOk || !window.Razorpay) {
+        throw new Error('Unable to load Razorpay Checkout. Please check your connection and try again.')
+      }
+
+      const rzp = new window.Razorpay({
+        key: orderData.key_id,
+        amount: orderData.amount,
+        currency: orderData.currency || 'INR',
+        name: 'MoviePass',
+        description: `Booking ${checkoutData.booking_reference || checkoutData.booking_id}`,
+        order_id: orderData.order_id,
+        prefill: {},
+        notes: {
+          booking_id: String(checkoutData.booking_id),
+          booking_reference: String(checkoutData.booking_reference || ''),
+        },
+        theme: { color: '#d32f2f' },
+        modal: {
+          ondismiss: () => {
+            setPaymentError('Payment window was closed. Your booking is not confirmed until payment is verified on the server.')
+            setProcessing(false)
+            paymentInFlightRef.current = false
+          },
+        },
+        handler: async function (response) {
+          // Do NOT confirm booking on client callback. Verify on backend.
+          try {
+            setPaymentError('')
+            const verifyFn = typeof verifyRazorpayPayment === 'function' ? verifyRazorpayPayment : null
+            const res = verifyFn
+              ? await verifyFn({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                })
+              : await verifyPayment(checkoutData.booking_id, {
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                })
+
+            if (res.payment_status === 'CAPTURED' || res.booking_status === 'CONFIRMED') {
+              onPaymentResult?.({ status: 'success', bookingId: checkoutData.booking_id, result: res })
+            } else {
+              const msg = res.message || 'Payment was not verified. Booking is not confirmed.'
+              setPaymentError(msg)
+              onPaymentResult?.({ status: 'failed', bookingId: checkoutData.booking_id, result: res, message: msg })
+            }
+          } catch (err) {
+            const msg = err.message || 'Payment verification failed. If amount was deducted, status will be reconciled by server/webhook.'
+            setPaymentError(msg)
+            onPaymentResult?.({ status: 'failed', bookingId: checkoutData.booking_id, message: msg })
+          } finally {
+            setProcessing(false)
+            paymentInFlightRef.current = false
+          }
+        },
+      })
+
+      rzp.on('payment.failed', function (resp) {
+        const msg = resp?.error?.description || 'Payment failed. Please try again if the booking is still valid.'
+        setPaymentError(msg)
+        setProcessing(false)
+        paymentInFlightRef.current = false
+      })
+
+      rzp.open()
+    } catch (err) {
+      setPaymentError(err.message || 'Failed to start Razorpay payment.')
+      setProcessing(false)
+      paymentInFlightRef.current = false
     }
   }
 
@@ -96,6 +209,9 @@ export default function CheckoutPage({
 
   const display = summary || {}
   const seats = display.seats || []
+  const providerName = checkoutData?.payment?.provider
+  const isRazorpay = !!checkoutData && (providerName === 'razorpay' || (!!checkoutData?.payment?.key_id && providerName !== 'sandbox'))
+  const isSandbox = !!checkoutData?.payment?.is_sandbox && !isRazorpay
 
   return (
     <div className="checkout-page">
@@ -148,13 +264,13 @@ export default function CheckoutPage({
             <>
               <div className="payment-method-option selected">
                 <div>
-                  <strong>Sandbox/Test Payment (Isolated)</strong>
-                  <p className="muted-note">No live payment provider is configured in this environment. This isolated sandbox flow is for development/testing only and must not be represented as a real successful transaction.</p>
+                  <strong>Razorpay (Test Mode) / Payment</strong>
+                  <p className="muted-note">Click below to create a booking and initiate payment. The actual amount is calculated by the backend.</p>
                 </div>
               </div>
               <div className="summary-actions" style={{marginTop: 12}}>
                 <button className="btn-primary" onClick={handleCreateCheckout} disabled={processing || !summary}>
-                  {processing ? 'Creating booking/payment order...' : 'Create Booking & Initiate Payment'}
+                  {processing ? 'Creating booking/payment order...' : 'Create Booking & Proceed to Pay'}
                 </button>
               </div>
             </>
@@ -163,27 +279,39 @@ export default function CheckoutPage({
               <div className="payment-processing-state">
                 <p><strong>Booking:</strong> {checkoutData.booking_reference} ({checkoutData.booking_status})</p>
                 <p><strong>Payment Order:</strong> {checkoutData.payment?.provider_order_id || 'N/A'}</p>
-                <p><strong>Provider:</strong> {checkoutData.payment?.provider} {checkoutData.payment?.is_sandbox ? '(Sandbox/Test)' : ''}</p>
+                <p><strong>Provider:</strong> {checkoutData.payment?.provider} {isSandbox ? '(Sandbox/Test)' : ''}</p>
                 <p><strong>Amount:</strong> {money(checkoutData.payment?.amount ?? checkoutData.total_payable_amount, checkoutData.currency || currency)}</p>
               </div>
-              <div className="sandbox-verify-form">
-                <h3>Sandbox Payment Verification</h3>
-                <p className="muted-note">Use the generated sandbox payment ID and signature below (or enter verified sandbox values) to simulate provider-verified payment evidence. Booking is confirmed only after server-side signature verification.</p>
-                {sandboxHelpers?.warning && <p className="muted-note warning-note">{sandboxHelpers.warning}</p>}
-                <label>
-                  <span>Provider Payment ID (sandbox)</span>
-                  <input value={sandboxInputs.provider_payment_id} onChange={(e) => setSandboxInputs({ ...sandboxInputs, provider_payment_id: e.target.value })} placeholder="sandbox_pay_..." />
-                </label>
-                <label>
-                  <span>Payment Signature (sandbox HMAC)</span>
-                  <input value={sandboxInputs.signature} onChange={(e) => setSandboxInputs({ ...sandboxInputs, signature: e.target.value })} placeholder="signature..." />
-                </label>
-                <div className="summary-actions">
-                  <button className="btn-primary" onClick={handleVerifyPayment} disabled={processing}>
-                    {processing ? 'Processing payment verification...' : 'Verify Payment & Confirm Booking'}
+
+              {isRazorpay ? (
+                <div className="summary-actions" style={{marginTop: 12}}>
+                  <button className="btn-primary" onClick={handleRazorpayPayNow} disabled={processing}>
+                    {processing ? 'Processing...' : 'Pay Now'}
                   </button>
+                  <p className="muted-note" style={{marginTop: 8}}>
+                    You will complete payment in Razorpay Checkout. Booking is confirmed only after server-side payment verification.
+                  </p>
                 </div>
-              </div>
+              ) : (
+                <div className="sandbox-verify-form">
+                  <h3>Sandbox Payment Verification</h3>
+                  <p className="muted-note">Use the generated sandbox payment ID and signature below (or enter verified sandbox values) to simulate provider-verified payment evidence. Booking is confirmed only after server-side signature verification.</p>
+                  {sandboxHelpers?.warning && <p className="muted-note warning-note">{sandboxHelpers.warning}</p>}
+                  <label>
+                    <span>Provider Payment ID (sandbox)</span>
+                    <input value={sandboxInputs.provider_payment_id} onChange={(e) => setSandboxInputs({ ...sandboxInputs, provider_payment_id: e.target.value })} placeholder="sandbox_pay_..." />
+                  </label>
+                  <label>
+                    <span>Payment Signature (sandbox HMAC)</span>
+                    <input value={sandboxInputs.signature} onChange={(e) => setSandboxInputs({ ...sandboxInputs, signature: e.target.value })} placeholder="signature..." />
+                  </label>
+                  <div className="summary-actions">
+                    <button className="btn-primary" onClick={handleVerifySandboxPayment} disabled={processing}>
+                      {processing ? 'Processing payment verification...' : 'Verify Payment & Confirm Booking'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </section>

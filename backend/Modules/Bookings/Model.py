@@ -133,8 +133,11 @@ class Payment(Base):
     booking_id = Column(BigInteger, ForeignKey("bookings.booking_id", ondelete="RESTRICT"), nullable=False, index=True)
     user_id = Column(BigInteger, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
     provider = Column(String(50), nullable=False, default="mock", server_default="mock")
+    payment_provider = Column(String(50), nullable=True)  # explicit provider name (razorpay/sandbox)
     provider_order_id = Column(String(100), nullable=True)
     provider_payment_id = Column(String(100), nullable=True)
+    razorpay_order_id = Column(String(100), nullable=True)
+    razorpay_payment_id = Column(String(100), nullable=True)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(10), nullable=False, default="INR", server_default="INR")
     payment_status = Column(String(30), nullable=False, default="INITIATED", server_default="INITIATED", index=True)
@@ -147,7 +150,7 @@ class Payment(Base):
     __table_args__ = (
         CheckConstraint("amount >= 0", name="ck_payments_amount_non_negative"),
         CheckConstraint(
-            "payment_status IN ('INITIATED','PENDING','AUTHORIZED','CAPTURED','FAILED','CANCELLED','REFUNDED')",
+            "payment_status IN ('INITIATED','PENDING','AUTHORIZED','CAPTURED','FAILED','CANCELLED','REFUNDED','CREATED')",
             name="ck_payments_status",
         ),
         Index(
@@ -192,3 +195,4 @@ class Ticket(Base):
             name="ck_tickets_status",
         ),
     )
+

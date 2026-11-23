@@ -5,7 +5,7 @@ React + Vite single-page app for the booker (ticket-booker) experience, aligned 
 ## Stack
 - React 19, Vite
 - No router library; view switching is state-driven in `src/App.jsx`
-- API client in `src/services/api.js` (base URL `http://localhost:8000`, `credentials: 'include'`, in-memory access token, refresh-once retry on 401 for applicable requests)
+- API client in `src/services/api.js` (base URL `http://localhost:8001`, `credentials: 'include'`, in-memory access token, refresh-once retry on 401 for applicable requests)
 
 ## Scripts
 ```bash
@@ -24,7 +24,7 @@ npm run lint
 - Logout and refresh/session handling integrated with backend auth contracts
 
 ## Configuration notes
-- Backend URL and dev port are fixed in code/config (`http://localhost:8000`, port `5173`). Ensure backend CORS/front-end origins and OAuth redirect configuration match your local setup.
+- Backend URL and dev port are fixed in code/config (`http://localhost:8001`, port `5173`). Ensure backend CORS/front-end origins and OAuth redirect configuration match your local setup.
 - No movie browsing, booking, or ticketing features are implemented (not present in reference scope).
 
 ## Limitations
