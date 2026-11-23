@@ -3,10 +3,13 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from config.rate_limit import limiter, rate_limit_exceeded_handler
 from Middleware.jwtVerify import verify_jwt
 from Modules.Auth.Controller import router as auth_router
 from Modules.Theatres.Controller import router as theatre_router
@@ -88,6 +91,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Global + route-specific rate limiting (SlowAPI).
+# Default limit: 200000 requests / 15 minutes per IP.
+# Auth endpoints override with stricter limits in their controllers.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
 
 # Session cookie, required by Authlib to verify the OAuth state
 app.add_middleware(
@@ -99,6 +109,21 @@ app.add_middleware(
 )
 
 app.middleware("http")(verify_jwt)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print("\n========== REQUEST INFO ==========")
+    print("Method:", request.method)
+    print("Path:", request.url.path)
+    print("Client:", request.client)
+    print("User-Agent:", request.headers.get("user-agent"))
+    print("Origin:", request.headers.get("origin"))
+    print("Referer:", request.headers.get("referer"))
+    print("=================================")
+
+    response = await call_next(request)
+    return response
 
 
 # One origin per frontend application
