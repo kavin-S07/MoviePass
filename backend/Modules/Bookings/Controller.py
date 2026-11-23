@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from Modules.Auth.Dependencies import get_token
@@ -26,16 +26,6 @@ from Modules.Bookings.Schema import (
 from config.database import get_db
 
 router = APIRouter(prefix="/bookings", tags=["Bookings & Tickets"])
-
-
-@router.post("/payments/webhook", status_code=status.HTTP_200_OK)
-async def payment_webhook(
-    request: Request,
-    db: Session = Depends(get_db),
-    x_payment_signature: str | None = Header(default=None, alias="X-Payment-Signature"),
-):
-    body = await request.body()
-    return Service.handle_payment_webhook(db, body, x_payment_signature)
 
 
 @router.post("/tickets/verify", response_model=VerifyTicketResponse, status_code=status.HTTP_200_OK)

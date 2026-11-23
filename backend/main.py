@@ -19,6 +19,7 @@ from Modules.Shows.Controller import router as shows_router
 from Modules.Admin.Controller import router as admin_router
 from Modules.Booker.Controller import router as booker_router
 from Modules.Bookings.Controller import router as bookings_router
+from Modules.Payments.Controller import router as payments_router
 from Modules.Notifications.Controller import router as notifications_router
 from Modules.Auth.Model import User
 from config.database import SessionLocal
@@ -111,20 +112,6 @@ app.add_middleware(
 app.middleware("http")(verify_jwt)
 
 
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    print("\n========== REQUEST INFO ==========")
-    print("Method:", request.method)
-    print("Path:", request.url.path)
-    print("Client:", request.client)
-    print("User-Agent:", request.headers.get("user-agent"))
-    print("Origin:", request.headers.get("origin"))
-    print("Referer:", request.headers.get("referer"))
-    print("=================================")
-
-    response = await call_next(request)
-    return response
-
 
 # One origin per frontend application
 origins = [
@@ -149,6 +136,7 @@ app.include_router(shows_router)
 app.include_router(admin_router)
 app.include_router(booker_router)
 app.include_router(bookings_router)
+app.include_router(payments_router)
 app.include_router(notifications_router)
 
 

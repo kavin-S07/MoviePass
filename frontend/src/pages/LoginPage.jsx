@@ -8,6 +8,7 @@ export default function LoginPage() {
   const { login, landingError } = useAuth()
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   function change(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -15,11 +16,15 @@ export default function LoginPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (loading) return
     setError('')
+    setLoading(true)
     try {
       await login(form)
     } catch (err) {
-      setError(err.message || 'Login failed')
+      setError(err.message || 'Unable to login. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -32,11 +37,11 @@ export default function LoginPage() {
         <input name="email" type="email" placeholder="Email" value={form.email} onChange={change} />
         <input name="password" type="password" placeholder="Password" value={form.password} onChange={change} />
         {error && <p className="error">{error}</p>}
-        <button type="submit">Login</button>
+        <button type="submit" disabled={loading}>{loading ? 'Logging in...' : 'Login'}</button>
       </form>
       <SocialButtons />
       <p className="switch">
-        Don&apos;t have an account? <Link to="/signup">Signup</Link>
+        Don't have an account? <Link to="/signup">Signup</Link>
       </p>
     </div>
   )

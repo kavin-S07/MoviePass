@@ -18,6 +18,7 @@ export default function SignupPage({ onSwitch }) {
   })
 
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   function change(e) {
 
@@ -27,8 +28,10 @@ export default function SignupPage({ onSwitch }) {
   async function handleSubmit(e) {
 
     e.preventDefault()
+    if (loading) return
 
     setError('')
+    setLoading(true)
 
     try {
 
@@ -36,7 +39,9 @@ export default function SignupPage({ onSwitch }) {
 
     } catch (err) {
 
-      setError(err.message || 'Signup failed')
+      setError(err.message || 'Unable to signup. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -55,14 +60,16 @@ export default function SignupPage({ onSwitch }) {
 
         {error && <p className="error">{error}</p>}
 
-        <button type="submit">Signup</button>
+        <button type="submit" disabled={loading}>{loading ? 'Signing up...' : 'Signup'}</button>
       </form>
 
       <SocialButtons />
 
       <p className="switch">
         Already have an account?{' '}
-        <a href="#" onClick={(e) => { e.preventDefault(); onSwitch() }}>Login</a>
+        <button type="button" onClick={() => onSwitch('login')}>
+          Login
+        </button>
       </p>
     </div>
   )

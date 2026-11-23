@@ -20,7 +20,7 @@ export default function SocialButtons() {
 
     setLoading(provider)
 
-    window.location.assign(`http://localhost:8000/auth/${provider}?app=${kind}`)
+    window.location.assign(`${API}/auth/${provider}?app=${kind}`)
   }
 
   return (

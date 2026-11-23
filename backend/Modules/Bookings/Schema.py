@@ -108,6 +108,8 @@ class PaymentInfo(BaseModel):
     payment_id: int
     provider: str
     provider_order_id: Optional[str] = None
+    provider_payment_id: Optional[str] = None
+    key_id: Optional[str] = None
     amount: float
     currency: str
     payment_status: str
@@ -130,9 +132,35 @@ class BookingCheckoutResponse(BaseModel):
     payment: PaymentInfo
 
 
+class CreatePaymentOrderRequest(BaseModel):
+    booking_id: int = Field(ge=1)
+
+
+class CreatePaymentOrderData(BaseModel):
+    key_id: Optional[str] = None
+    order_id: str
+    amount: int
+    currency: str = "INR"
+    booking_id: int
+    booking_reference: str
+    payment_id: int
+    provider: str
+    is_sandbox: bool = False
+
+
+class CreatePaymentOrderResponse(BaseModel):
+    success: bool = True
+    message: str
+    data: CreatePaymentOrderData
+
+
 class VerifyPaymentRequest(BaseModel):
-    provider_payment_id: str = Field(min_length=3, max_length=120)
-    signature: str = Field(min_length=3, max_length=256)
+    # Supports legacy sandbox flow and Razorpay flow.
+    provider_payment_id: Optional[str] = Field(default=None, min_length=3, max_length=120)
+    signature: Optional[str] = Field(default=None, min_length=3, max_length=256)
+    razorpay_order_id: Optional[str] = Field(default=None, min_length=3, max_length=120)
+    razorpay_payment_id: Optional[str] = Field(default=None, min_length=3, max_length=120)
+    razorpay_signature: Optional[str] = Field(default=None, min_length=3, max_length=256)
 
 
 class PaymentStatusResponse(BaseModel):
@@ -172,7 +200,6 @@ class SandboxHelpersResponse(BaseModel):
     provider_order_id: str
     sandbox_payment_id: str
     sandbox_signature: str
-    webhook_signature_for_event: Optional[str] = None
     warning: str
 
 

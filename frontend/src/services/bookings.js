@@ -37,6 +37,20 @@ export const verifyBookingPayment = (bookingId, payload, token) =>
     token,
   })
 
+export const createPaymentOrder = (bookingId, token) =>
+  apiFetch('/payments/create-order', {
+    method: 'POST',
+    body: { booking_id: bookingId },
+    token,
+  })
+
+export const verifyRazorpayPayment = (payload, token) =>
+  apiFetch('/payments/verify', {
+    method: 'POST',
+    body: payload,
+    token,
+  })
+
 export const retryBookingPayment = (bookingId, token) =>
   apiFetch(`/bookings/${bookingId}/payments/retry`, {
     method: 'POST',

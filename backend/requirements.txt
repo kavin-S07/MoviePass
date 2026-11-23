@@ -79,3 +79,4 @@ websockets==16.1.1
 Authlib==1.6.9
 slowapi==0.1.9
 pytest==9.0.2
+razorpay==2.0.0

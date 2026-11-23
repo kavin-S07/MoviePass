@@ -13,6 +13,7 @@ export default function LoginPage({ onSwitch }) {
   const [form, setForm] = useState({ email: '', password: '' })
 
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   function change(e) {
 
@@ -22,8 +23,10 @@ export default function LoginPage({ onSwitch }) {
   async function handleSubmit(e) {
 
     e.preventDefault()
+    if (loading) return
 
     setError('')
+    setLoading(true)
 
     try {
 
@@ -31,7 +34,9 @@ export default function LoginPage({ onSwitch }) {
 
     } catch (err) {
 
-      setError(err.message || 'Login failed')
+      setError(err.message || 'Unable to login. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -48,14 +53,16 @@ export default function LoginPage({ onSwitch }) {
 
         {error && <p className="error">{error}</p>}
 
-        <button type="submit">Login</button>
+        <button type="submit" disabled={loading}>{loading ? 'Logging in...' : 'Login'}</button>
       </form>
 
       <SocialButtons />
 
       <p className="switch">
         Don't have an account?{' '}
-        <a href="#" onClick={(e) => { e.preventDefault(); onSwitch() }}>Signup</a>
+        <button type="button" onClick={() => onSwitch('signup')}>
+          Signup
+        </button>
       </p>
     </div>
   )

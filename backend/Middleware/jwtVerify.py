@@ -12,15 +12,13 @@ async def verify_jwt(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
 
-    # Skip login, signups, cookie-based refresh/logout flows, and provider webhooks
-    # (payment webhooks are authenticated via provider signature verification, not user JWT)
+    # Skip login, signups, and cookie-based refresh/logout flows
     if request.url.path in [
         "/auth/login",
         "/auth/signup",
         "/auth/signup/owner",
         "/auth/refresh",
         "/auth/logout",
-        "/bookings/payments/webhook",
     ]:
         return await call_next(request)
 
