@@ -8,12 +8,7 @@ import {
   signupOwner,
   OAUTH_ERRORS,
 } from '../services/auth'
-import {
-  clearAccessToken,
-  refreshAccessToken,
-  setAccessToken,
-  setAuthFailureHandler,
-} from '../services/api'
+import { setAuthFailureHandler } from '../services/api'
 
 const AuthContext = createContext(null)
 
@@ -22,24 +17,11 @@ export function useAuth() {
   return useContext(AuthContext)
 }
 
-async function tryRestoreSession() {
-
-  try {
-
-    return await refreshAccessToken()
-  } catch {
-
-    return ''
-  }
-}
-
 // kind: "booker" or "owner" - decides which signup endpoint is used.
 // The login endpoint is the same for both applications.
 export function AuthProvider({ children, kind }) {
 
   const [user, setUser] = useState(null)
-
-  const [token, setToken] = useState('')
 
   const [landingError, setLandingError] = useState('')
 
@@ -48,15 +30,14 @@ export function AuthProvider({ children, kind }) {
   useEffect(() => {
 
     setAuthFailureHandler(() => {
-      clearAccessToken()
-      setToken('')
       setUser(null)
     })
 
     return () => setAuthFailureHandler(null)
   }, [])
 
-  // Handle social redirect or restore session from refresh cookie.
+  // Handle social redirect or restore the session from the HttpOnly
+  // cookies the browser sends on requests.
   useEffect(() => {
 
     let cancelled = false
@@ -76,12 +57,9 @@ export function AuthProvider({ children, kind }) {
 
           window.history.replaceState(null, '', window.location.pathname)
 
-          setAccessToken(accessTokenFromRedirect)
-
           const data = await fetchHome(accessTokenFromRedirect)
 
           if (!cancelled) {
-            setToken(accessTokenFromRedirect)
             setUser(data.user)
           }
 
@@ -99,23 +77,18 @@ export function AuthProvider({ children, kind }) {
           return
         }
 
-        const restoredToken = await tryRestoreSession()
-
-        if (!restoredToken || cancelled) return
-
-        const data = await fetchHome(restoredToken)
+        // Cookie-based session: no token is stored on the client. If the
+        // access cookie is missing or expired, apiFetch retries through
+        // /auth/refresh before surfacing a 401.
+        const data = await fetchHome()
 
         if (!cancelled) {
-          setAccessToken(restoredToken)
-          setToken(restoredToken)
           setUser(data.user)
         }
 
       } catch (err) {
 
         if (!cancelled) {
-          clearAccessToken()
-          setToken('')
           setUser(null)
 
           if (window.location.hash.includes('access_token=')) {
@@ -142,8 +115,6 @@ export function AuthProvider({ children, kind }) {
 
     const data = await signupRequest(values)
 
-    setAccessToken(data.access_token)
-    setToken(data.access_token)
     setUser(data.user)
 
     return data
@@ -153,8 +124,6 @@ export function AuthProvider({ children, kind }) {
 
     const data = await loginRequest(values)
 
-    setAccessToken(data.access_token)
-    setToken(data.access_token)
     setUser(data.user)
 
     return data
@@ -168,12 +137,10 @@ export function AuthProvider({ children, kind }) {
       // Clear local session even if server logout fails.
     }
 
-    clearAccessToken()
     setUser(null)
-    setToken('')
   }
 
-  const value = { kind, user, token, landingError, ready, signup, login, logout, setUser }
+  const value = { kind, user, landingError, ready, signup, login, logout, setUser }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

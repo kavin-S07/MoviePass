@@ -56,20 +56,20 @@ export default function MovieDetailsPage({ movieId, onNavigate }) {
       <div className="dash-columns">
         <section className="panel">
           <div className="panel-head"><h2>Poster &amp; Synopsis</h2></div>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {movie.poster_url ? (
               <img
                 src={movie.poster_url}
                 alt={`${movie.movie_name} poster`}
-                style={{ width: '100%', maxWidth: 180, height: 'auto', aspectRatio: '2 / 3', objectFit: 'cover', borderRadius: 10, border: '1px solid #e2e8f0', background: '#f8fafc', flex: '0 0 auto' }}
+                style={{ width: '100%', maxWidth: '11.25rem', height: 'auto', aspectRatio: '2 / 3', objectFit: 'cover', borderRadius: '0.625rem', border: '1px solid #E7E5F0', background: '#F7F7F7', flex: '0 0 auto' }}
                 onError={(e) => { e.currentTarget.style.display = 'none' }}
               />
             ) : (
-              <div style={{ width: '100%', maxWidth: 180, aspectRatio: '2 / 3', borderRadius: 10, background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flex: '0 0 auto' }}>
+              <div style={{ width: '100%', maxWidth: '11.25rem', aspectRatio: '2 / 3', borderRadius: '0.625rem', background: '#E7E5F0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7A7A8C', flex: '0 0 auto' }}>
                 No Poster
               </div>
             )}
-            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+            <div style={{ flex: '1 1 13.75rem', minWidth: 0 }}>
               <p style={{ whiteSpace: 'pre-wrap', marginTop: 0, overflowWrap: 'anywhere' }}>{movie.description || 'No description provided.'}</p>
             </div>
           </div>

@@ -1,13 +1,32 @@
 from sqlalchemy.orm import Session
 
-from Modules.Theatres.Model import Movie, Show
+from Modules.Theatres.Model import Movie, Show, TheatreMovie
 
 
-def list_movies(db: Session, search: str | None = None):
+# Build a safe "contains" pattern for ILIKE: %, _ and \ typed by the user are
+# treated as literal characters. Use together with escape="\\".
+def name_search_pattern(term: str) -> str:
+    escaped = term.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+def list_movies(
+    db: Session,
+    search: str | None = None,
+    exclude_theatre_id: int | None = None,
+):
     query = db.query(Movie)
 
-    if search:
-        query = query.filter(Movie.movie_name.ilike(f"%{search}%"))
+    if search and search.strip():
+        query = query.filter(Movie.movie_name.ilike(name_search_pattern(search), escape="\\"))
+
+    # Hide movies already mapped to this theatre. Movies mapped only to
+    # *other* theatres are intentionally still returned.
+    if exclude_theatre_id is not None:
+        mapped_ids = db.query(TheatreMovie.movie_id).filter(
+            TheatreMovie.theatre_id == exclude_theatre_id
+        )
+        query = query.filter(~Movie.movie_id.in_(mapped_ids))
 
     return query.order_by(Movie.created_at.desc(), Movie.movie_id.desc()).all()
 

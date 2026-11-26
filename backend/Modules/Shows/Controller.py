@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from Modules.Auth.Dependencies import get_token
 from Modules.Shows import Service
-from Modules.Shows.Schema import ShowCreate, ShowResponse
+from Modules.Shows.Schema import ShowBookingSummaryResponse, ShowCreate, ShowResponse
 
 
 router = APIRouter(tags=["Shows"])
@@ -18,6 +18,15 @@ def list_shows(
     token: str = Depends(get_token),
 ):
     return Service.list_shows(db, token)
+
+
+@router.get("/shows/{show_id}/booking-summary", response_model=ShowBookingSummaryResponse, status_code=status.HTTP_200_OK)
+def get_show_booking_summary(
+    show_id: int,
+    db: Session = Depends(get_db),
+    token: str = Depends(get_token),
+):
+    return Service.get_show_booking_summary(db, token, show_id)
 
 
 @router.post("/shows", response_model=ShowResponse, status_code=status.HTTP_201_CREATED)

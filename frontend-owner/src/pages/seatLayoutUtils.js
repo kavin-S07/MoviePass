@@ -30,17 +30,35 @@ export function seatMetrics(seat) {
   }
 }
 
+// All sizes in this file are "design px" (1 design px = 1/16 rem). They are
+// handed to CSS as rem so the seat map follows the global UI scale (--ui-scale
+// in index.css) like every other component.
+const rem = (designPx) => `${designPx / 16}rem`
+
+// Actual screen px per design px (e.g. 0.67 when --ui-scale is 0.67).
+export function uiScale() {
+
+  if (typeof window === 'undefined') return 1
+
+  const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize)
+
+  return rootPx > 0 ? rootPx / 16 : 1
+}
+
+// Measured element width (screen px) -> design px, for fitSeatSize().
+export const toDesignPx = (screenPx) => screenPx / uiScale()
+
 // CSS custom properties consumed by the .asw seat grid styles.
 export function gridVars(seat) {
 
   const m = seatMetrics(seat)
 
   return {
-    '--seat': `${m.seat}px`,
-    '--aisle': `${m.aisle}px`,
-    '--label': `${m.label}px`,
-    '--seat-font': `${m.font}px`,
-    '--seat-gap': `${SEAT_GAP}px`,
+    '--seat': rem(m.seat),
+    '--aisle': rem(m.aisle),
+    '--label': rem(m.label),
+    '--seat-font': rem(m.font),
+    '--seat-gap': rem(SEAT_GAP),
   }
 }
 
@@ -51,13 +69,13 @@ export function buildGridTemplate(cols, vGaps) {
 
   const gaps = new Set(vGaps)
 
-  const parts = ['var(--label, 36px)']
+  const parts = ['var(--label, 2.25rem)']
 
   for (let c = 0; c < cols; c++) {
 
-    parts.push('var(--seat, 34px)')
+    parts.push('var(--seat, 2.125rem)')
 
-    if (gaps.has(c)) parts.push('var(--aisle, 27px)')
+    if (gaps.has(c)) parts.push('var(--aisle, 1.6875rem)')
   }
 
   return parts.join(' ')

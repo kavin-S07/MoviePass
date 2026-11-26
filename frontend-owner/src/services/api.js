@@ -169,6 +169,26 @@ export function refreshAccessToken() {
   })
 }
 
+// Normalises a list response: a bare array, or an object wrapping the array
+// under a common key (paginated `items`, `movies`, `data`, `results` ...).
+const LIST_KEYS = ['items', 'movies', 'theatre_movies', 'data', 'results', 'records']
+
+export function toList(data) {
+
+  if (Array.isArray(data)) return data
+
+  if (data && typeof data === 'object') {
+    for (const key of LIST_KEYS) {
+      if (Array.isArray(data[key])) return data[key]
+    }
+    if (import.meta.env?.DEV) {
+      console.warn('[api] Unrecognised list response shape:', data)
+    }
+  }
+
+  return []
+}
+
 // Single fetch wrapper for the whole app. Includes credentials for
 // HttpOnly refresh cookies and retries once after /auth/refresh on 401.
 export async function apiFetch(path, options = {}) {

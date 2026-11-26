@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { API } from '../services/api'
 import { GoogleIcon } from './icons'
 
 const PROVIDERS = [

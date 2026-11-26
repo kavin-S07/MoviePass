@@ -30,6 +30,24 @@ def list_shows(db: Session, token: str):
     return [_row_to_dict(row) for row in rows]
 
 
+def get_show_booking_summary(db: Session, token: str, show_id: int):
+    user = AuthService.get_current_owner(db, token)
+    show = Repository.get_show_enriched(db, show_id)
+    if not show:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
+
+    if user.role != "ADMIN" and getattr(show, "theatre_id", None) is not None:
+        # Verify theatre ownership
+        _, theatre = Repository.get_screen_with_theatre(db, show.screen_id)
+        if not theatre or theatre.owner_id != user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this show")
+
+    summary = Repository.get_show_booking_summary(db, show_id)
+    if not summary:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show not found")
+    return summary
+
+
 def create_show(db: Session, token: str, payload):
     user = AuthService.get_current_owner(db, token)
 

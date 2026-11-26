@@ -34,3 +34,30 @@ class ShowResponse(BaseModel):
     status: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class ShowBookingSummaryResponse(BaseModel):
+    show_id: int
+    movie_name: str | None = None
+    theatre_id: int | None = None
+    theatre_name: str | None = None
+    screen_id: int | None = None
+    screen_name: str | None = None
+    show_date: date | None = None
+    start_time: time | None = None
+    end_time: time | None = None
+    show_status: str | None = None
+
+    total_seats: int = 0
+    booked_seats: int = 0
+    locked_seats: int = 0
+    available_seats: int = 0
+
+    total_bookings: int = 0
+    confirmed_bookings: int = 0
+    pending_bookings: int = 0
+    cancelled_bookings: int = 0
+    failed_bookings: int = 0
+
+    total_revenue: float = 0
+    confirmed_revenue: float = 0

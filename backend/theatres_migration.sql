@@ -98,3 +98,13 @@ CREATE TABLE IF NOT EXISTS shows (
 CREATE INDEX IF NOT EXISTS ix_shows_screen_date ON shows (screen_id, show_date);
 CREATE INDEX IF NOT EXISTS ix_shows_movie ON shows (movie_id);
 CREATE INDEX IF NOT EXISTS ix_shows_date ON shows (show_date);
+
+-- 7. Theatre Movies (mapping between theatres and the global movies table)
+CREATE TABLE IF NOT EXISTS theatre_movies (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    theatre_id BIGINT NOT NULL REFERENCES theatres(theatre_id) ON DELETE CASCADE,
+    movie_id   BIGINT NOT NULL REFERENCES movies(movie_id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (theatre_id, movie_id)
+);
+CREATE INDEX IF NOT EXISTS ix_theatre_movies_movie ON theatre_movies (movie_id);

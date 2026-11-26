@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 
 import { useAuth } from '../context/AuthContext'
-import { deleteMovie, fetchMovies } from '../services/movies'
+import { toList } from '../services/api'
+import { deleteMovie } from '../services/movies'
+import { fetchMyTheatreMovies } from '../services/theatres'
 
 function formatDuration(minutes) {
   if (!minutes && minutes !== 0) return 'N/A'
@@ -12,22 +14,47 @@ function formatDuration(minutes) {
   return `${m}m`
 }
 
-export default function MoviesPage({ onNavigate }) {
+export default function MoviesPage({ onNavigate, notice = '', onNoticeShown }) {
   const { token } = useAuth()
 
+  // Only movies mapped to the signed-in owner's theatre (resolved server-side).
   const [movies, setMovies] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [noTheatre, setNoTheatre] = useState(false)
   const [confirmId, setConfirmId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const [success, setSuccess] = useState(notice)
+
+  // Show the message handed over by the Add/Edit form once, then clear it.
+  useEffect(() => {
+    if (!notice) return
+    setSuccess(notice)
+    onNoticeShown?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notice])
+
+  useEffect(() => {
+    if (!success) return
+    const t = setTimeout(() => setSuccess(''), 6000)
+    return () => clearTimeout(t)
+  }, [success])
 
   async function load() {
     setLoading(true)
     setError('')
+    setNoTheatre(false)
     try {
-      const data = await fetchMovies(token)
-      setMovies(Array.isArray(data) ? data : (data?.items || []))
+      const result = await fetchMyTheatreMovies(token)
+      setMovies(toList(result))
     } catch (err) {
-      setError(err.message || 'Could not load movies')
+      const msg = err?.message || ''
+      if (/not associated with a theatre/i.test(msg)) {
+        setNoTheatre(true)
+        setMovies([])
+      } else {
+        setError(msg || 'Could not load movies')
+      }
     } finally {
       setLoading(false)
     }
@@ -39,12 +66,17 @@ export default function MoviesPage({ onNavigate }) {
   }, [token])
 
   async function handleDelete(id) {
+    setDeletingId(id)
+    setError('')
     try {
-      await deleteMovie(id, token)
+      const res = await deleteMovie(id, token)
       setMovies((prev) => prev.filter((m) => m.movie_id !== id))
       setConfirmId(null)
+      setSuccess(res?.message || 'Movie removed')
     } catch (err) {
       setError(err.message || 'Could not delete movie')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -57,18 +89,35 @@ export default function MoviesPage({ onNavigate }) {
       <header className="dash-header">
         <div>
           <h1>Movies</h1>
-          <p>Manage movies available for your theatre shows.</p>
+          <p>Movies available in your theatre. Add one from the catalogue or create a new one to schedule shows.</p>
         </div>
         <button className="btn-primary" onClick={() => onNavigate('add-movie')}>
           + Add Movie
         </button>
       </header>
 
-      {error && <p className="error">{error}</p>}
+      {noTheatre && (
+        <div className="panel empty-state" style={{ marginBottom: 16 }}>
+          <p>You are not associated with a theatre yet.</p>
+          <p style={{ color: 'var(--text-secondary)', marginTop: 4 }}>Create or link a theatre first, then add movies to it.</p>
+          <button className="btn-primary" onClick={() => onNavigate('theatres')} style={{ marginTop: 12 }}>
+            Go to Theatres
+          </button>
+        </div>
+      )}
 
-      {movies.length === 0 ? (
+      {!noTheatre && (
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 12 }}>
+          {movies.length} {movies.length === 1 ? 'movie' : 'movies'} in your theatre
+        </p>
+      )}
+
+      {success && <p className="success" role="status" style={{ marginBottom: 12 }}>{success}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+
+      {noTheatre ? null : movies.length === 0 ? (
         <div className="panel empty-state">
-          <p>No movies added yet.</p>
+          <p>No movies in your theatre yet.</p>
           <button className="btn-primary" onClick={() => onNavigate('add-movie')}>
             + Add your first movie
           </button>
@@ -109,15 +158,16 @@ export default function MoviesPage({ onNavigate }) {
                   <p className="movie-card-meta">Release: {movie.release_date || 'TBA'}</p>
                   <div className="movie-card-actions">
                     <button type="button" className="btn-secondary" onClick={() => onNavigate('movie-details', movie.movie_id)}>View</button>
-                    <button type="button" className="btn-secondary" onClick={() => onNavigate('edit-movie', movie.movie_id)}>Edit</button>
                     <button type="button" className="btn-small danger" onClick={() => setConfirmId(movie.movie_id)}>Delete</button>
                   </div>
                   {confirmId === movie.movie_id && (
                     <div className="confirm-bar owner-movie-confirm">
-                      <span>Delete this movie?</span>
+                      <span>Remove this movie from your theatre?</span>
                       <div>
-                        <button type="button" className="btn-small" onClick={() => setConfirmId(null)}>Cancel</button>
-                        <button type="button" className="btn-small danger" onClick={() => handleDelete(movie.movie_id)}>Delete</button>
+                        <button type="button" className="btn-small" onClick={() => setConfirmId(null)} disabled={deletingId === movie.movie_id}>Cancel</button>
+                        <button type="button" className="btn-small danger" onClick={() => handleDelete(movie.movie_id)} disabled={deletingId === movie.movie_id}>
+                          {deletingId === movie.movie_id ? 'Removing...' : 'Delete'}
+                        </button>
                       </div>
                     </div>
                   )}

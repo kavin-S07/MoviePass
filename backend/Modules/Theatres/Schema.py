@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from datetime import date, time
+from datetime import date, datetime, time
 
 
 # Dashboard stats
@@ -41,6 +41,25 @@ class DashboardStats(BaseModel):
     summary: SummaryStats
     recent_theatres: list[RecentTheatre]
     upcoming_shows: list[UpcomingShow]
+
+
+# Map an existing global movie to the authenticated user's theatre
+class MapMovieToTheatreRequest(BaseModel):
+
+    movie_id: int
+
+    # Optional target theatre, validated against the authenticated owner.
+    theatre_id: int | None = None
+
+
+class TheatreMovieResponse(BaseModel):
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    theatre_id: int
+    movie_id: int
+    created_at: datetime | None = None
 
 
 # Theatre create / update request

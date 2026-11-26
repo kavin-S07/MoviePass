@@ -76,13 +76,17 @@ const PATHS = {
   ),
 }
 
+// `size` is in design px; it is emitted in rem so icons follow the global UI
+// scale (--ui-scale in index.css) together with everything else.
 export function Icon({ name, size = 20, className = '' }) {
+
+  const dim = `${size / 16}rem`
 
   return (
     <svg
       className={className}
-      width={size}
-      height={size}
+      width={dim}
+      height={dim}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

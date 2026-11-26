@@ -10,6 +10,7 @@ import {
   fitSeatSize,
   formatINR,
   gridVars,
+  toDesignPx,
   rowLabel,
   seatKey,
 } from './seatLayoutUtils'
@@ -83,7 +84,7 @@ export default function ScreenPreview({ theatreId, payload, onBack, onDone }) {
 
   }, [seats, categories])
 
-  const colorOf = (name) => categories.find((c) => c.category_name === name)?.color || '#94a3b8'
+  const colorOf = (name) => categories.find((c) => c.category_name === name)?.color || '#7A7A8C'
 
   // Fit the seat map to the available width (and keep it fitted on resize)
   useEffect(() => {
@@ -94,7 +95,7 @@ export default function ScreenPreview({ theatreId, payload, onBack, onDone }) {
 
       if (!el || !cols) return
 
-      setSeatSize(fitSeatSize(el.clientWidth - 32, cols, vGaps.length))
+      setSeatSize(fitSeatSize(toDesignPx(el.clientWidth) - 32, cols, vGaps.length))
     }
 
     fit()
