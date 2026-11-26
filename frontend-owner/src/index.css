@@ -1,35 +1,78 @@
 :root {
-  --bg-main: #0B1020;
-  --bg-secondary: #10182B;
-  --bg-card: #151C2E;
-  --bg-elevated: #1C263A;
-  --brand-primary: #F04438;
-  --brand-primary-hover: #D9362B;
-  --btn-secondary: #263248;
-  --text-primary: #FFFFFF;
-  --text-secondary: #A7B0C0;
-  --text-muted: #778399;
-  --border-color: #263248;
-  --success: #22C55E;
-  --warning: #F5B942;
-  --error: #EF4444;
-  --info: #3B82F6;
+  /* District-inspired design tokens */
+  --primary-pink: #E13FF3;
+  --primary-purple: #6444E4;
+  --secondary-purple: #9988DC;
+  --theme-purple: #6E52FA;
+  --primary-text: #131316;
+  --white: #FFFFFF;
+  --light-bg: #F7F7F7;
+  --light-purple-bg: #F6F4FF;
 
-  --seat-available: #334155;
-  --seat-selected: #F04438;
-  --seat-booked: #64748B;
-  --seat-premium: #D4A64A;
-  --seat-unavailable: #252B36;
+  /* Semantic tokens (mapped for app-wide consistency) */
+  --bg-main: var(--light-bg);
+  --bg-secondary: var(--light-purple-bg);
+  --bg-card: var(--white);
+  --bg-elevated: var(--white);
+  --brand-primary: var(--primary-purple);
+  --brand-primary-hover: #5335CF;
+  --brand-accent: var(--primary-pink);
+  --brand-gradient: linear-gradient(135deg, var(--primary-pink) 0%, var(--primary-purple) 100%);
+  --brand-gradient-soft: linear-gradient(135deg, rgba(225, 63, 243, 0.12) 0%, rgba(100, 68, 228, 0.12) 100%);
+  --btn-secondary: var(--light-purple-bg);
+  --text-primary: var(--primary-text);
+  --text-secondary: #55556A;
+  --text-muted: #7A7A8C;
+  --border-color: #E7E5F0;
+  --border-strong: #D6D2E6;
+  --success: #16A34A;
+  --warning: #D97706;
+  --error: #DC2626;
+  --info: #6444E4;
+
+  /* Seat status */
+  --seat-available: #E8E5F5;
+  --seat-selected: var(--primary-purple);
+  --seat-booked: #B8B5C8;
+  --seat-premium: var(--secondary-purple);
+  --seat-unavailable: #ECECF1;
+
+  --shadow-sm: 0 1px 2px rgba(19, 19, 22, 0.04);
+  --shadow-md: 0 8px 24px rgba(100, 68, 228, 0.08);
+  --shadow-lg: 0 16px 40px rgba(100, 68, 228, 0.12);
 
   --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
-  --transition: 160ms ease;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --transition: 180ms ease;
 
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   line-height: 1.5;
   color: var(--text-primary);
   background: var(--bg-main);
+}
+
+/* ==========================================================================
+   Global UI scale
+   --------------------------------------------------------------------------
+   Every size in the stylesheets is expressed in rem (1rem = 16 design px),
+   so this ONE value scales the whole app: typography, spacing, icons, cards,
+   sidebar, navbar, forms, seat map ... everything.
+     0.67 -> looks the same as browser zoom 67% while the browser stays at 100%
+     1    -> original size
+   Media-query breakpoints are written in px and already match 0.67
+   (original breakpoint x 0.67); keep that in mind if you change this value.
+   ========================================================================== */
+:root { --ui-scale: 0.67; }
+html { font-size: calc(var(--ui-scale) * 100%); }
+
+/* Native radios/checkboxes have a fixed built-in size (13px) that the rem scale
+   cannot reach; size them in rem so they scale with everything else.
+   :where() keeps specificity at 0 so component styles still win. */
+:where(input[type="radio"], input[type="checkbox"]) {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  margin: 0.1875rem 0.1875rem 0.1875rem 0.25rem;
 }
 
 *, *::before, *::after { box-sizing: border-box; }

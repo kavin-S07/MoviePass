@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import SeatLockReminderPopup from './SeatLockReminderPopup'
+import LockTimer, { formatCountdown, useLockCountdown } from '../components/LockTimer'
 
 const MAX_SEATS = 10
 
@@ -35,8 +37,9 @@ export default function SeatSelectionPage({
   onReleaseLock,
   onLockExpired,
   onContinueToCheckout,
+  lockReminderOpen = false,
+  closeLockReminder,
 }) {
-  const [now, setNow] = useState(Date.now())
   const [summaryOpen, setSummaryOpen] = useState(false)
   const expiredHandledRef = useRef(false)
 
@@ -53,14 +56,7 @@ export default function SeatSelectionPage({
     }
   }, [summaryOpen, locking])
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  const expiresAtMs = lockInfo?.expires_at ? new Date(lockInfo.expires_at).getTime() : null
-  const remainingMs = expiresAtMs ? Math.max(0, expiresAtMs - now) : 0
-  const lockExpired = Boolean(lockInfo && expiresAtMs && remainingMs <= 0)
+  const { remainingMs, expired: lockExpired } = useLockCountdown(lockInfo?.expires_at)
 
   useEffect(() => {
     if (lockExpired && !expiredHandledRef.current) {
@@ -127,13 +123,6 @@ export default function SeatSelectionPage({
     onToggleSeat?.(seat, { maxSeats: MAX_SEATS })
   }
 
-  function formatCountdown(ms) {
-    const total = Math.ceil(ms / 1000)
-    const m = Math.floor(total / 60)
-    const s = total % 60
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-  }
-
   // Row aisles only (clamped to valid interior positions). Column aisles are intentionally not rendered
   // so seats in a row stay evenly spaced.
   const rowAisles = useMemo(() => {
@@ -166,7 +155,14 @@ export default function SeatSelectionPage({
   if (error && !seatLayout) return <div className="page-state error-state-box"><p>{error}</p><button className="btn-primary" onClick={onRefresh}>Retry</button></div>
 
   return (
-    <div className="seat-selection-page">
+      <div className="seat-selection-page">
+      {lockReminderOpen && lockInfo && !lockExpired && (
+        <SeatLockReminderPopup
+          expiresAt={lockInfo.expires_at}
+          onClose={() => closeLockReminder?.()}
+          onComplete={onContinueToCheckout}
+        />
+      )}
       <div className="page-header-row">
         <div>
           <button className="btn-link back-link" onClick={onBackToShows}>← Back to show selection</button>
@@ -186,8 +182,8 @@ export default function SeatSelectionPage({
         <div className="seat-total-seats">
           <span>{selectedSeats.length} / {MAX_SEATS} seats</span>
           <small>{selectedSeats.length ? selectedSeats.map((s) => s.seat_name).join(', ') : 'No seats selected'}</small>
-          {lockInfo && !lockExpired && <small className="seat-total-lock">Seats locked • {formatCountdown(remainingMs)}</small>}
         </div>
+        {lockInfo && <LockTimer expiresAt={lockInfo.expires_at} />}
         <div className="seat-total-actions">
           {!lockInfo && selectedSeats.length > 0 && (
             <button className="btn-secondary" type="button" onClick={onClearSelection} disabled={locking}>Clear</button>
@@ -291,7 +287,18 @@ export default function SeatSelectionPage({
               <button type="button" className="modal-close" aria-label="Close booking summary" onClick={() => setSummaryOpen(false)} disabled={locking}>×</button>
             </div>
 
+            <div className="modal-body">
             {lockError && <div className="error-state-box inline-alert"><p>{lockError}</p></div>}
+
+            {lockInfo && (
+              <div className={`lock-box ${lockExpired ? 'expired' : ''}`}>
+                <div className="lock-box-head">
+                  <span className="lock-box-status">{lockExpired ? 'Seat hold expired' : 'Seats locked for you'}</span>
+                  <LockTimer expiresAt={lockInfo.expires_at} />
+                </div>
+                {lockSeatNames.length > 0 && <p className="lock-box-seats">Locked seats: <strong>{lockSeatNames.join(', ')}</strong></p>}
+              </div>
+            )}
 
             <div className="summary-row"><span>Movie</span><strong>{movie?.movie_name || 'N/A'}</strong></div>
             <div className="summary-row"><span>Theatre</span><strong>{show?.theatre_name || 'N/A'}</strong></div>
@@ -317,15 +324,9 @@ export default function SeatSelectionPage({
             <div className="summary-row"><span>Taxes & Fees</span><strong>{lockInfo ? money(Number(lockInfo.subtotal || 0) - subtotal) : 'Calculated by backend at lock/payment'}</strong></div>
             <div className="summary-row total"><span>Estimated/Locked Total</span><strong>{money(lockInfo ? lockInfo.subtotal : subtotal)}</strong></div>
 
-            {lockInfo && (
-              <div className={`lock-box ${lockExpired ? 'expired' : ''}`}>
-                <p><strong>Seat Lock:</strong> {lockExpired ? 'Expired' : 'Active'}</p>
-                <p>Token: <code>{String(lockInfo.lock_token).slice(0, 10)}...</code></p>
-                <p>Expires in: <strong>{lockExpired ? '00:00' : formatCountdown(remainingMs)}</strong></p>
-                {lockSeatNames.length > 0 && <p>Locked seats: {lockSeatNames.join(', ')}</p>}
-              </div>
-            )}
+            </div>
 
+            <div className="modal-footer">
             <div className="modal-actions">
               {!lockInfo && (
                 <>
@@ -349,7 +350,8 @@ export default function SeatSelectionPage({
               )}
             </div>
 
-            <p className="muted-note">Maximum {MAX_SEATS} seats per booking attempt. Backend lock expiry is authoritative. Taxes/fees are finalized by backend.</p>
+            <p className="muted-note">Maximum {MAX_SEATS} seats per booking attempt. Taxes/fees are finalized by the backend.</p>
+            </div>
           </div>
         </div>
       )}

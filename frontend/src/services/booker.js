@@ -10,20 +10,20 @@ function qs(params = {}) {
   return s ? `?${s}` : ''
 }
 
-export const fetchBookerHome = (params = {}, token) =>
-  apiFetch(`/booker/home${qs(params)}`, { token })
+export const fetchBookerHome = (params = {}) =>
+  apiFetch(`/booker/home${qs(params)}`)
 
-export const fetchBookerMovies = (params = {}, token) =>
-  apiFetch(`/booker/movies${qs(params)}`, { token })
+export const fetchBookerMovies = (params = {}) =>
+  apiFetch(`/booker/movies${qs(params)}`)
 
-export const fetchBookerMovieFilters = (token) =>
-  apiFetch('/booker/movies/filters', { token })
+export const fetchBookerMovieFilters = () =>
+  apiFetch('/booker/movies/filters')
 
-export const fetchBookerMovieDetail = (movieId, token) =>
-  apiFetch(`/booker/movies/${movieId}`, { token })
+export const fetchBookerMovieDetail = (movieId) =>
+  apiFetch(`/booker/movies/${movieId}`)
 
-export const fetchBookerMovieShows = (movieId, params = {}, token) =>
-  apiFetch(`/booker/movies/${movieId}/shows${qs(params)}`, { token })
+export const fetchBookerMovieShows = (movieId, params = {}) =>
+  apiFetch(`/booker/movies/${movieId}/shows${qs(params)}`)
 
-export const fetchBookerShowDiscovery = (movieId, params = {}, token) =>
-  apiFetch(`/booker/movies/${movieId}/show-discovery${qs(params)}`, { token })
+export const fetchBookerShowDiscovery = (movieId, params = {}) =>
+  apiFetch(`/booker/movies/${movieId}/show-discovery${qs(params)}`)

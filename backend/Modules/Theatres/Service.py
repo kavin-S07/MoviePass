@@ -1,6 +1,8 @@
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from Modules.Auth import Service as AuthService
+from Modules.Movies import Repository as MoviesRepository
 from Modules.Theatres import Repository
 from Modules.Theatres.Schema import (
     TheatreResponse,
@@ -49,6 +51,84 @@ def _access_scope(db: Session, token: str):
     return user.id
 
 
+def resolve_theatre(db: Session, user, theatre_id: int | None = None):
+    """Resolve the theatre an owner-scoped movie operation applies to.
+
+    The theatre is always derived from the authenticated user, never taken on
+    trust from the client:
+      * theatre_id omitted -> the owner's own theatre.
+      * theatre_id given   -> must exist and belong to the owner (admins may
+                              target any theatre).
+    """
+
+    if theatre_id is None:
+
+        theatre = Repository.get_theatre_by_owner_id(db, user.id)
+
+        if not theatre:
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You are not associated with a theatre",
+            )
+
+        return theatre
+
+    theatre = Repository.get_theatre_by_id(db, theatre_id)
+
+    if not theatre:
+
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Theatre not found",
+        )
+
+    if user.role != "ADMIN" and theatre.owner_id != user.id:
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this theatre",
+        )
+
+    return theatre
+
+
+def get_my_theatre_movies(db: Session, token: str, search: str | None = None, theatre_id: int | None = None):
+    """List movies mapped to the authenticated user's theatre (optionally by name)."""
+    user = AuthService.get_current_owner(db, token)
+    theatre = resolve_theatre(db, user, theatre_id)
+    return Repository.list_theatre_movies(db, theatre.theatre_id, search=search)
+
+
+def map_movie_to_theatre(db: Session, token: str, movie_id: int, theatre_id: int | None = None):
+    """Map an existing global movie to the authenticated user's theatre.
+
+    Idempotent: an existing mapping is returned without creating duplicates.
+    Concurrent inserts are absorbed via the unique constraint.
+    """
+    user = AuthService.get_current_owner(db, token)
+    theatre = resolve_theatre(db, user, theatre_id)
+
+    movie = MoviesRepository.get_movie_by_id(db, movie_id)
+    if not movie:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Movie not found")
+
+    existing = Repository.get_theatre_movie(db, theatre.theatre_id, movie.movie_id)
+    if existing:
+        return existing
+
+    try:
+        mapping = Repository.create_theatre_movie(db, theatre.theatre_id, movie.movie_id)
+        db.commit()
+        return mapping
+    except IntegrityError:
+        db.rollback()
+        existing = Repository.get_theatre_movie(db, theatre.theatre_id, movie.movie_id)
+        if not existing:
+            raise
+        return existing
+
+
 # Dashboard stats
 def get_dashboard(db: Session, token: str):
 
@@ -62,7 +142,7 @@ def get_dashboard(db: Session, token: str):
         "summary": {
             "total_theatres": Repository.count_theatres(db, owner_id),
             "total_screens": Repository.count_screens(db, owner_id),
-            "total_movies": Repository.count_movies(db),
+            "total_movies": Repository.count_movies(db, owner_id),
             "total_shows": Repository.count_shows(db, owner_id),
             "upcoming_shows": Repository.count_upcoming_shows(db, owner_id),
         },

@@ -18,7 +18,13 @@ class MovieBase(BaseModel):
 
 
 class MovieCreate(MovieBase):
-    pass
+    # Optional: the global movie the owner picked from "Show Movies". The server
+    # decides whether the submitted details still match it (reuse the record and
+    # only map it) or differ (create a separate record mapped to the theatre).
+    source_movie_id: int | None = Field(default=None, ge=1)
+    # Optional: target theatre. Always validated against the authenticated
+    # owner; when omitted the owner's own theatre is used.
+    theatre_id: int | None = Field(default=None, ge=1)
 
 
 class MovieUpdate(MovieBase):
@@ -41,3 +47,12 @@ class MovieResponse(BaseModel):
     cast_names: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class MovieAddResponse(MovieResponse):
+    """Result of POST /movies: the movie plus how it was added."""
+
+    # Theatre the movie was mapped to (None for admin catalogue-only creation).
+    theatre_id: int | None = None
+    # True when an existing global record was reused (only a mapping was created).
+    reused_existing: bool = False

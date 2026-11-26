@@ -1,24 +1,10 @@
 export const API = 'http://localhost:8001'
 
-let accessToken = ''
 let refreshPromise = null
 let onAuthFailure = null
 
-export function setAccessToken(token) {
-
-  accessToken = token || ''
-}
-
-export function getAccessToken() {
-
-  return accessToken
-}
-
-export function clearAccessToken() {
-
-  accessToken = ''
-}
-
+// The access token is stored in the browser as an HttpOnly cookie set by
+// the FastAPI backend; the browser sends it automatically on API requests.
 export function setAuthFailureHandler(handler) {
 
   onAuthFailure = handler
@@ -159,8 +145,6 @@ export function refreshAccessToken() {
       throw new Error(getApiErrorMessage(res, data) || 'Session expired')
     }
 
-    setAccessToken(data.access_token)
-
     return data.access_token
   })()
 
@@ -169,13 +153,14 @@ export function refreshAccessToken() {
   })
 }
 
-// Single fetch wrapper for the whole app. Includes credentials for
-// HttpOnly refresh cookies and retries once after /auth/refresh on 401.
+// Single fetch wrapper for the whole app. Sends credentials so the
+// browser attaches the HttpOnly access-token cookie; retries once after
+// /auth/refresh on 401. `token` is only used by the social-login redirect,
+// which receives the token in the URL hash.
 export async function apiFetch(path, options = {}) {
 
   const { method = 'GET', body, token, retry = true } = options
 
-  const effectiveToken = token !== undefined ? token : accessToken
   const url = buildUrl(path)
 
   let res
@@ -186,7 +171,7 @@ export async function apiFetch(path, options = {}) {
       credentials: 'include',
       headers: {
         ...(body ? { 'Content-Type': 'application/json' } : {}),
-        ...(effectiveToken ? { Authorization: `Bearer ${effectiveToken}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     })
@@ -200,13 +185,12 @@ export async function apiFetch(path, options = {}) {
 
     try {
 
-      const newToken = await refreshAccessToken()
+      await refreshAccessToken()
 
-      return apiFetch(path, { ...options, token: newToken, retry: false })
+      return apiFetch(path, { ...options, retry: false })
 
     } catch (err) {
 
-      clearAccessToken()
       if (onAuthFailure) onAuthFailure()
 
       throw err instanceof Error ? err : new Error(getApiErrorMessage(res, data))

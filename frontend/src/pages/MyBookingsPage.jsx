@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { cancelBooking, fetchMyBookings, fetchTicket } from '../services/bookings'
-import { qrToSvg } from '../utils/qr'
+import { useEffect, useState } from 'react'
+import { cancelBooking, fetchMyBookings } from '../services/bookings'
 
 function fmtTime(t) {
   if (!t) return ''
@@ -50,76 +48,7 @@ function statusTone(item, variant) {
   return 'neutral'
 }
 
-function TicketMiniQr({ bookingId, token, bookingStatus, variant, initialLabel = 'QR code' }) {
-  const [state, setState] = useState({ loading: false, qrId: '', error: '' })
-  const [imgError, setImgError] = useState(false)
-  const isCancelled = variant === 'cancelled' || bookingStatus === 'CANCELLED' || bookingStatus === 'FAILED' || bookingStatus === 'EXPIRED'
-  const canLoad = bookingStatus === 'CONFIRMED' && !isCancelled
-
-  async function loadQr() {
-    if (!canLoad || state.loading || state.qrId) return
-    setState({ loading: true, qrId: '', error: '' })
-    setImgError(false)
-    try {
-      const res = await fetchTicket(bookingId, token)
-      const qrId = res?.ticket?.qr_code_identifier || ''
-      setState({ loading: false, qrId, error: qrId ? '' : 'QR not available' })
-    } catch (e) {
-      setState({ loading: false, qrId: '', error: e.message || 'Unable to load QR' })
-    }
-  }
-
-  const qrSvg = useMemo(() => {
-    try { return state.qrId ? qrToSvg(state.qrId, 140) : '' } catch { return '' }
-  }, [state.qrId])
-  const qrImgUrl = state.qrId
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=6&data=${encodeURIComponent(state.qrId)}`
-    : ''
-
-  if (isCancelled) {
-    return (
-      <div className="dt-qr-box dt-qr-unavailable dt-qr-cancelled" aria-label={initialLabel}>
-        <div className="dt-qr-placeholder">Ticket cancelled</div>
-        <div className="dt-qr-caption">QR not available</div>
-      </div>
-    )
-  }
-
-  if (!canLoad) {
-    return (
-      <div className="dt-qr-box dt-qr-unavailable" aria-label={initialLabel}>
-        <div className="dt-qr-placeholder">No QR</div>
-        <div className="dt-qr-caption">Available after confirmation</div>
-      </div>
-    )
-  }
-
-  if (!state.qrId) {
-    return (
-      <div className="dt-qr-box">
-        <button type="button" className="dt-qr-load-btn" onClick={loadQr} disabled={state.loading}>
-          {state.loading ? 'Loading QR...' : 'Show QR'}
-        </button>
-        <div className="dt-qr-caption">{state.error || 'Digital ticket QR'}</div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="dt-qr-box">
-      {qrSvg ? (
-        <div className="dt-qr-svg" dangerouslySetInnerHTML={{ __html: qrSvg }} />
-      ) : qrImgUrl && !imgError ? (
-        <img src={qrImgUrl} alt="Ticket QR code" width="140" height="140" onError={() => setImgError(true)} />
-      ) : (
-        <div className="dt-qr-placeholder">QR unavailable</div>
-      )}
-      <div className="dt-qr-caption">Scan at entry</div>
-    </div>
-  )
-}
-
-function CancelBookingModal({ item, token, onClose, onSuccess }) {
+function CancelBookingModal({ item, onClose, onSuccess }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const seats = Array.isArray(item.seat_numbers) ? item.seat_numbers.join(', ') : 'N/A'
@@ -140,7 +69,7 @@ function CancelBookingModal({ item, token, onClose, onSuccess }) {
     setSubmitting(true)
     setError('')
     try {
-      await cancelBooking(item.booking_id, token)
+      await cancelBooking(item.booking_id)
       onSuccess('Booking cancelled successfully.')
     } catch (e) {
       setError(e?.message || 'Failed to cancel booking')
@@ -176,12 +105,9 @@ function CancelBookingModal({ item, token, onClose, onSuccess }) {
   )
 }
 
-function DigitalTicketCard({ item, variant, onView, token, onCancelSuccess }) {
+function DigitalTicketCard({ item, variant, onView, onCancelSuccess }) {
   const [shareMsg, setShareMsg] = useState('')
   const [showCancel, setShowCancel] = useState(false)
-  const seats = Array.isArray(item.seat_numbers) ? item.seat_numbers : []
-  const seatsText = seats.length ? seats.join(', ') : 'N/A'
-  const ticketCount = seats.length || null
   const bookingRef = item.booking_reference || `#${item.booking_id}`
   const title = item.movie_name || 'Movie'
   const theatre = item.theatre_name || 'N/A'
@@ -255,9 +181,6 @@ function DigitalTicketCard({ item, variant, onView, token, onCancelSuccess }) {
           {showCancelReason && <p className="dt-inline-msg dt-inline-msg-muted">{cancelBlockedReason}</p>}
           {shareMsg && !isCancelled ? <p className="dt-inline-msg">{shareMsg}</p> : null}
         </div>
-        <div className="dt-qr-side">
-          <TicketMiniQr bookingId={item.booking_id} token={token} bookingStatus={item.booking_status} variant={variant} />
-        </div>
       </div>
 
       <div className="dt-separator" aria-hidden="true">
@@ -267,12 +190,6 @@ function DigitalTicketCard({ item, variant, onView, token, onCancelSuccess }) {
       </div>
 
       <div className="dt-middle">
-        <div className="dt-detail-cells">
-          <div className="dt-cell"><span>Tickets</span><strong>{ticketCount != null ? ticketCount : 'N/A'}</strong></div>
-          <div className="dt-cell"><span>Screen</span><strong>{screen || 'N/A'}</strong></div>
-          <div className="dt-cell dt-cell-wide"><span>Seats</span><strong>{seatsText}</strong></div>
-          <div className="dt-cell dt-cell-wide"><span>Booking ID</span><strong>{bookingRef}</strong></div>
-        </div>
         {isPending && (
           <div className="dt-note dt-note-warn">This booking is pending. It is not confirmed or issued yet.</div>
         )}
@@ -301,7 +218,6 @@ function DigitalTicketCard({ item, variant, onView, token, onCancelSuccess }) {
       {showCancel && (
         <CancelBookingModal
           item={item}
-          token={token}
           onClose={() => setShowCancel(false)}
           onSuccess={(msg) => {
             setShowCancel(false)
@@ -313,7 +229,7 @@ function DigitalTicketCard({ item, variant, onView, token, onCancelSuccess }) {
   )
 }
 
-function Section({ title, items, onView, emptyText, variant, token, onCancelSuccess }) {
+function Section({ title, items, onView, emptyText, variant, onCancelSuccess }) {
   return (
     <section className="bookings-section digital-bookings-section">
       <div className="bookings-section-head">
@@ -325,7 +241,7 @@ function Section({ title, items, onView, emptyText, variant, token, onCancelSucc
       ) : (
         <div className="digital-tickets-grid">
           {items.map((b) => (
-            <DigitalTicketCard key={b.booking_id} item={b} variant={variant} onView={onView} token={token} onCancelSuccess={onCancelSuccess} />
+            <DigitalTicketCard key={b.booking_id} item={b} variant={variant} onView={onView} onCancelSuccess={onCancelSuccess} />
           ))}
         </div>
       )}
@@ -334,7 +250,6 @@ function Section({ title, items, onView, emptyText, variant, token, onCancelSucc
 }
 
 export default function MyBookingsPage({ onViewBooking }) {
-  const { token } = useAuth()
   const [data, setData] = useState({ upcoming: [], past: [], cancelled: [] })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -343,7 +258,7 @@ export default function MyBookingsPage({ onViewBooking }) {
   async function load() {
     setLoading(true); setError('')
     try {
-      const res = await fetchMyBookings(token)
+      const res = await fetchMyBookings()
       setData({ upcoming: res.upcoming || [], past: res.past || [], cancelled: res.cancelled || [] })
     } catch (e) {
       setError(e.message || 'Failed to load bookings')
@@ -371,9 +286,9 @@ export default function MyBookingsPage({ onViewBooking }) {
       {error && <div className="error-state-box inline-alert"><p>{error}</p><button className="btn-primary" onClick={load}>Retry</button></div>}
       {!loading && !error && (
         <>
-          <Section title="Upcoming Bookings" variant="upcoming" items={data.upcoming} onView={onViewBooking} emptyText="No upcoming bookings." token={token} onCancelSuccess={handleCancelSuccess} />
-          <Section title="Past Bookings" variant="past" items={data.past} onView={onViewBooking} emptyText="No past bookings." token={token} onCancelSuccess={handleCancelSuccess} />
-          <Section title="Cancelled Bookings" variant="cancelled" items={data.cancelled} onView={onViewBooking} emptyText="No cancelled bookings." token={token} onCancelSuccess={handleCancelSuccess} />
+          <Section title="Upcoming Bookings" variant="upcoming" items={data.upcoming} onView={onViewBooking} emptyText="No upcoming bookings." onCancelSuccess={handleCancelSuccess} />
+          <Section title="Past Bookings" variant="past" items={data.past} onView={onViewBooking} emptyText="No past bookings." onCancelSuccess={handleCancelSuccess} />
+          <Section title="Cancelled Bookings" variant="cancelled" items={data.cancelled} onView={onViewBooking} emptyText="No cancelled bookings." onCancelSuccess={handleCancelSuccess} />
         </>
       )}
     </div>

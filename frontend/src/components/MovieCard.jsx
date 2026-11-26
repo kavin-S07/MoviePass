@@ -1,42 +1,24 @@
-function formatDuration(minutes) {
-  if (!minutes && minutes !== 0) return 'N/A'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h && m) return `${h}h ${m}m`
-  if (h) return `${h}h`
-  return `${m}m`
-}
-
-export default function MovieCard({ movie, onViewDetails, onBook }) {
-  const canBook = Boolean(movie.booking_available)
-  const isComingSoon = movie.release_status === 'coming_soon'
+export default function MovieCard({ movie, onViewDetails }) {
+  // Distracting info is intentionally removed: only poster, name and a
+  // smaller secondary line with certification + language remain.
+  const cert = movie.certification || 'NR'
+  const language = movie.language || 'N/A'
 
   return (
-    <article className="movie-card">
-      <button className="movie-card-poster-wrap" onClick={() => onViewDetails(movie)} type="button">
-        {movie.poster_url ? (
-          <img src={movie.poster_url} alt={movie.movie_name} className="movie-card-poster" loading="lazy" />
-        ) : (
-          <div className="movie-card-poster placeholder-poster">No Poster</div>
-        )}
-        <span className={`status-badge ${isComingSoon ? 'badge-soon' : canBook ? 'badge-book' : 'badge-released'}`}>
-          {isComingSoon ? 'Coming Soon' : canBook ? 'Book Now' : 'Now Showing'}
-        </span>
-      </button>
-      <div className="movie-card-body">
-        <h3 className="movie-card-title" title={movie.movie_name}>{movie.movie_name}</h3>
-        <p className="movie-card-meta">{movie.genre || 'Genre N/A'} • {movie.language || 'Language N/A'}</p>
-        <p className="movie-card-meta">{formatDuration(movie.duration_minutes)} • {movie.certification || 'NR'}</p>
-        <p className="movie-card-meta">Release: {movie.release_date || 'TBA'}</p>
-        <div className="movie-card-actions">
-          <button type="button" className="btn-secondary" onClick={() => onViewDetails(movie)}>View Details</button>
-          {canBook ? (
-            <button type="button" className="btn-primary" onClick={() => onBook(movie)}>Book Tickets</button>
-          ) : (
-            <button type="button" className="btn-disabled" disabled>{isComingSoon ? 'Coming Soon' : 'Not Available'}</button>
-          )}
+    <button type="button" className="movie-card" onClick={() => onViewDetails?.(movie)}>
+      {movie.poster_url ? (
+        <img src={movie.poster_url} alt={movie.movie_name} className="movie-card-poster" loading="lazy" />
+      ) : (
+        <div className="movie-card-poster placeholder-poster" aria-label="Poster unavailable">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M7 6v4M11 6v4M15 6v4M7 14v4M11 14v4M15 14v4" />
+          </svg>
+          <span className="poster-unavailable-label">Poster unavailable</span>
         </div>
-      </div>
-    </article>
+      )}
+      <span className="movie-card-title" title={movie.movie_name}>{movie.movie_name}</span>
+      <span className="movie-card-meta">{cert} | {language}</span>
+    </button>
   )
 }

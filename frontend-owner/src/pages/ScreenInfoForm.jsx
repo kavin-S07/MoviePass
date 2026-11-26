@@ -1,14 +1,14 @@
 import { useMemo, useRef, useState } from 'react'
 
 const DEFAULT_CATEGORIES = [
-  { category_name: 'Regular', price: 150, color: '#3b82f6' },
-  { category_name: 'Premium', price: 250, color: '#a855f7' },
+  { category_name: 'Regular', price: 150, color: '#6444E4' },
+  { category_name: 'Premium', price: 250, color: '#6E52FA' },
   { category_name: 'VIP',     price: 400, color: '#f59e0b' },
 ]
 
 const COLOR_CHOICES = [
-  '#3b82f6', '#a855f7', '#f59e0b', '#ef4444',
-  '#22c55e', '#06b6d4', '#ec4899', '#64748b',
+  '#6444E4', '#6E52FA', '#f59e0b', '#ef4444',
+  '#22c55e', '#06b6d4', '#ec4899', '#7A7A8C',
 ]
 
 const SIZE_PRESETS = [
@@ -83,10 +83,10 @@ function LayoutThumb({ rows, cols }) {
       >
         <defs>
           <pattern id="asw-thumb-seat" width={cell} height={cell} patternUnits="userSpaceOnUse">
-            <rect x="1.4" y="1.4" width="7.2" height="7.2" rx="1.8" fill="#3b82f6" />
+            <rect x="1.4" y="1.4" width="7.2" height="7.2" rx="1.8" fill="#6444E4" />
           </pattern>
         </defs>
-        <rect x={w * 0.1} y="2" width={w * 0.8} height="4" rx="2" fill="#cbd5e1" />
+        <rect x={w * 0.1} y="2" width={w * 0.8} height="4" rx="2" fill="#C7C3D9" />
         <rect x="0" y="14" width={w} height={h} fill="url(#asw-thumb-seat)" />
       </svg>
     </div>
@@ -224,7 +224,7 @@ export default function ScreenInfoForm({ onNext, onCancel, initialValues = null 
 
       const used = new Set(prev.map((c) => c.color))
 
-      const color = COLOR_CHOICES.find((c) => !used.has(c)) || '#64748b'
+      const color = COLOR_CHOICES.find((c) => !used.has(c)) || '#7A7A8C'
 
       let n = prev.length + 1
 
@@ -290,7 +290,7 @@ export default function ScreenInfoForm({ onNext, onCancel, initialValues = null 
           price: Number(cat.price),
           color: cat.color,
         }))
-        : [{ category_name: 'Standard', price: p, color: '#3b82f6' }],
+        : [{ category_name: 'Standard', price: p, color: '#6444E4' }],
       seats: {
         rows: r,
         cols: c,

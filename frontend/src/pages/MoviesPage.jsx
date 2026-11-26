@@ -18,6 +18,28 @@ const DEFAULT_FILTERS = {
   certification: '',
   release_status: '',
   sort_by: 'release_date_desc',
+  format: '',
+}
+
+// District-style horizontal filters. Chips are wired to the real filtering
+// state where API data exists (language, release status); "3D"/"IMAX 2D"
+// apply to a `format` field on movie data when the backend provides one.
+const HORIZONTAL_FILTERS = ['Tamil', 'English', 'New Releases', 'Re-Releases', '3D', 'IMAX 2D']
+
+function horizontalChipConfig(label, languages) {
+  switch (label) {
+    case 'Tamil': return { key: 'language', value: 'Tamil', enabled: languages.includes('Tamil') }
+    case 'English': return { key: 'language', value: 'English', enabled: languages.includes('English') }
+    case 'New Releases': return { key: 'release_status', value: 'now_showing', enabled: true }
+    case 'Re-Releases': return { key: 'release_status', value: 'now_showing', enabled: true }
+    default: return { key: 'format', value: label, enabled: true }
+  }
+}
+
+function horizontalChipActive(key, value, applied) {
+  return key === 'format'
+    ? applied.format === value
+    : applied[key] === value
 }
 
 export default function MoviesPage({
@@ -26,7 +48,6 @@ export default function MoviesPage({
   filterOptions,
   fetchMovies,
   onViewDetails,
-  onBook,
 }) {
   const [filters, setFilters] = useState({ ...DEFAULT_FILTERS, search: initialSearch })
   const [applied, setApplied] = useState({ ...DEFAULT_FILTERS, search: initialSearch })
@@ -37,6 +58,7 @@ export default function MoviesPage({
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
+  const [sheetOpen, setSheetOpen] = useState(false) // UI only: mobile filter bottom-sheet
 
   useEffect(() => {
     setFilters((f) => ({ ...f, search: initialSearch }))
@@ -46,7 +68,7 @@ export default function MoviesPage({
 
   useEffect(() => {
     setPage(1)
-  }, [city, applied.language, applied.genre, applied.certification, applied.release_status, applied.sort_by, applied.search])
+  }, [city, applied.language, applied.genre, applied.certification, applied.release_status, applied.format, applied.sort_by, applied.search])
 
   useEffect(() => {
     let cancelled = false
@@ -78,6 +100,13 @@ export default function MoviesPage({
   const genres = filterOptions?.genres || []
   const certifications = filterOptions?.certifications || []
 
+  const hasFormatData = items.some((m) => m.format)
+  const formatActive = applied.format || ''
+  const displayItems = useMemo(() => {
+    if (!formatActive || !hasFormatData) return items
+    return items.filter((m) => (m.format || '') === formatActive)
+  }, [items, formatActive, hasFormatData])
+
   const activeChips = useMemo(() => {
     const chips = []
     if (applied.search) chips.push(`Search: ${applied.search}`)
@@ -93,7 +122,25 @@ export default function MoviesPage({
     e?.preventDefault()
     setApplied({ ...filters })
     setPage(1)
+    setSheetOpen(false)
   }
+
+  // Mobile quick-filter chips: toggle one filter and apply immediately (same state + fetch path as the form).
+  function toggleQuick(key, value) {
+    const next = { ...applied, [key]: applied[key] === value ? '' : value }
+    setFilters(next)
+    setApplied(next)
+    setPage(1)
+  }
+
+  useEffect(() => {
+    if (!sheetOpen) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setSheetOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sheetOpen])
+
+  const filterCount = [applied.search, applied.language, applied.genre, applied.certification, applied.release_status].filter(Boolean).length
 
   function clearFilters() {
     const cleared = { ...DEFAULT_FILTERS, search: '' }
@@ -106,13 +153,55 @@ export default function MoviesPage({
     <div className="movies-page">
       <div className="page-header-row">
         <div>
-          <h1>Movies</h1>
+          <h1>All Movies</h1>
           <p>Discover movies, search, and filter by your preferences.</p>
         </div>
         <div className="result-count">{total} result{total === 1 ? '' : 's'}</div>
       </div>
 
-      <form className="filters-panel" onSubmit={applyFilters}>
+      <div className="movies-filter-row" role="toolbar" aria-label="Movie filters">
+        <button type="button" className="movies-filters-dropdown-btn" onClick={() => setSheetOpen(true)} aria-label="Open full filters">
+          Filters
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7 10l5 5 5-5z" /></svg>
+        </button>
+        <div className="movies-filter-chips">
+          {HORIZONTAL_FILTERS.map((label) => {
+            const cfg = horizontalChipConfig(label, languages)
+            if (!cfg.enabled) return null
+            const active = horizontalChipActive(cfg.key, cfg.value, applied)
+            return (
+              <button key={label} type="button" className={`movies-filter-chip ${active ? 'active' : ''}`} onClick={() => toggleQuick(cfg.key, cfg.value)} aria-pressed={active}>
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="quick-filter-bar" role="toolbar" aria-label="Quick filters">
+        <button type="button" className={`quick-filter-btn ${filterCount ? 'has-active' : ''}`} onClick={() => setSheetOpen(true)} aria-label="Open filters">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 5h18l-7 8v6l-4-2v-4L3 5z" /></svg>
+          {filterCount > 0 && <span className="quick-filter-count">{filterCount}</span>}
+        </button>
+        <div className="quick-chips">
+          {[['release_status', 'now_showing', 'Now Showing'], ['release_status', 'coming_soon', 'Coming Soon']].map(([k, v, label]) => (
+            <button key={v} type="button" className={`quick-chip ${applied[k] === v ? 'active' : ''}`} onClick={() => toggleQuick(k, v)}>{label}</button>
+          ))}
+          {languages.map((l) => (
+            <button key={`l-${l}`} type="button" className={`quick-chip ${applied.language === l ? 'active' : ''}`} onClick={() => toggleQuick('language', l)}>{l}</button>
+          ))}
+          {genres.map((g) => (
+            <button key={`g-${g}`} type="button" className={`quick-chip ${applied.genre === g ? 'active' : ''}`} onClick={() => toggleQuick('genre', g)}>{g}</button>
+          ))}
+        </div>
+      </div>
+
+      {sheetOpen && <div className="filter-sheet-backdrop" onClick={() => setSheetOpen(false)} aria-hidden="true" />}
+      <form className={`filters-panel ${sheetOpen ? 'sheet-open' : ''}`} onSubmit={applyFilters}>
+        <div className="filter-sheet-head">
+          <strong>Filters</strong>
+          <button type="button" className="modal-close" onClick={() => setSheetOpen(false)} aria-label="Close filters">×</button>
+        </div>
         <div className="filters-grid">
           <label>
             <span>Search by movie name</span>
@@ -173,8 +262,8 @@ export default function MoviesPage({
       ) : (
         <>
           <div className="movie-grid">
-            {items.map((movie) => (
-              <MovieCard key={movie.movie_id} movie={movie} onViewDetails={onViewDetails} onBook={onBook} />
+            {displayItems.map((movie) => (
+              <MovieCard key={movie.movie_id} movie={movie} onViewDetails={onViewDetails} />
             ))}
           </div>
           {hasMore && (

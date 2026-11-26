@@ -174,7 +174,7 @@ export default function ShowSelectionPage({
               </div>
               <div className="showtimes-wrap">
                 {theatre.shows.map((show) => {
-                  const isSelected = selectedShow?.show_id === show.show_id
+                  const isSelected = String(selectedShow?.show_id) === String(show.show_id)
                   const disabled = !show.is_bookable
                   const cls = show.availability_label === 'available' ? 'available' : show.availability_label === 'cancelled' ? 'cancelled' : 'unavailable'
                   return (
@@ -183,7 +183,17 @@ export default function ShowSelectionPage({
                       type="button"
                       className={`showtime-chip ${cls} ${isSelected ? 'selected' : ''}`}
                       disabled={disabled}
-                      onClick={() => { if (disabled) return; onShowSelect(show, theatre); onContinueToSeats?.(show, data?.movie) }}
+                      onClick={() => {
+                        if (disabled) return
+                        const fullShow = {
+                          ...show,
+                          theatre_id: show.theatre_id ?? theatre.theatre_id,
+                          theatre_name: show.theatre_name || theatre.theatre_name,
+                          show_date: show.show_date || data?.selected_date || selectedDate,
+                        }
+                        onShowSelect(fullShow, theatre)
+                        onContinueToSeats?.(fullShow, data?.movie)
+                      }}
                       title={disabled ? (show.availability_label === 'cancelled' ? 'Cancelled show cannot be booked' : 'Show unavailable') : `Select ${fmtTime(show.start_time)} show`}
                     >
                       <span className="showtime-time">{fmtTime(show.start_time)} - {fmtTime(show.end_time)}</span>

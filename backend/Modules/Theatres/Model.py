@@ -47,6 +47,28 @@ class Movie(Base):
     )
 
 
+class TheatreMovie(Base):
+    """Maps a globally-shared Movie to a specific Theatre.
+
+    One movie may map to multiple theatres; the unique constraint prevents
+    duplicate mappings for the same (theatre, movie) pair.
+    """
+
+    __tablename__ = "theatre_movies"
+
+    id = Column(BigInteger, Identity(always=True), primary_key=True)
+
+    theatre_id = Column(BigInteger, ForeignKey("theatres.theatre_id", ondelete="CASCADE"), nullable=False, index=True)
+
+    movie_id = Column(BigInteger, ForeignKey("movies.movie_id", ondelete="CASCADE"), nullable=False, index=True)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("theatre_id", "movie_id", name="uq_theatre_movies_theatre_movie"),
+    )
+
+
 class Theatre(Base):
 
     __tablename__ = "theatres"

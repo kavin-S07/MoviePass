@@ -1,86 +1,77 @@
 import { apiFetch } from './api'
 
-export const fetchShowSeatLayout = (showId, token) =>
-  apiFetch(`/bookings/shows/${showId}/seats`, { token })
+export const fetchShowSeatLayout = (showId) =>
+  apiFetch(`/bookings/shows/${showId}/seats`)
 
-export const lockShowSeats = (showId, seatIds, token) =>
+export const lockShowSeats = (showId, seatIds) =>
   apiFetch(`/bookings/shows/${showId}/locks`, {
     method: 'POST',
     body: { seat_ids: seatIds },
-    token,
   })
 
-export const releaseShowSeatLocks = (showId, payload = {}, token) =>
+export const releaseShowSeatLocks = (showId, payload = {}) =>
   apiFetch(`/bookings/shows/${showId}/locks/release`, {
     method: 'POST',
     body: payload,
-    token,
   })
 
-export const fetchBookingSummary = (lockToken, token) =>
-  apiFetch(`/bookings/summary?lock_token=${encodeURIComponent(lockToken)}`, { token })
+export const fetchBookingSummary = (lockToken) =>
+  apiFetch(`/bookings/summary?lock_token=${encodeURIComponent(lockToken)}`)
 
-export const createBookingCheckout = (lockToken, token) =>
+export const createBookingCheckout = (lockToken) =>
   apiFetch('/bookings/checkout', {
     method: 'POST',
     body: { lock_token: lockToken },
-    token,
   })
 
-export const fetchBookingStatus = (bookingId, token) =>
-  apiFetch(`/bookings/${bookingId}`, { token })
+export const fetchBookingStatus = (bookingId) =>
+  apiFetch(`/bookings/${bookingId}`)
 
-export const verifyBookingPayment = (bookingId, payload, token) =>
+export const verifyBookingPayment = (bookingId, payload) =>
   apiFetch(`/bookings/${bookingId}/payments/verify`, {
     method: 'POST',
     body: payload,
-    token,
   })
 
-export const createPaymentOrder = (bookingId, token) =>
+export const createPaymentOrder = (bookingId) =>
   apiFetch('/payments/create-order', {
     method: 'POST',
     body: { booking_id: bookingId },
-    token,
   })
 
-export const verifyRazorpayPayment = (payload, token) =>
+export const verifyRazorpayPayment = (payload) =>
   apiFetch('/payments/verify', {
     method: 'POST',
     body: payload,
-    token,
   })
 
-export const retryBookingPayment = (bookingId, token) =>
+export const retryBookingPayment = (bookingId) =>
   apiFetch(`/bookings/${bookingId}/payments/retry`, {
     method: 'POST',
-    token,
   })
 
-export const fetchSandboxPaymentHelpers = (bookingId, token) =>
-  apiFetch(`/bookings/${bookingId}/payments/sandbox/helpers`, { token })
+export const fetchSandboxPaymentHelpers = (bookingId) =>
+  apiFetch(`/bookings/${bookingId}/payments/sandbox/helpers`)
 
-export const fetchMyBookings = (token) =>
-  apiFetch('/bookings/my', { token })
+export const fetchMyBookings = () =>
+  apiFetch('/bookings/my')
 
-export const fetchBookingDetails = (bookingId, token) =>
-  apiFetch(`/bookings/${bookingId}/details`, { token })
+export const fetchBookingDetails = (bookingId) =>
+  apiFetch(`/bookings/${bookingId}/details`)
 
-export const fetchTicket = (bookingId, token) =>
-  apiFetch(`/bookings/${bookingId}/ticket`, { token })
+export const fetchTicket = (bookingId) =>
+  apiFetch(`/bookings/${bookingId}/ticket`)
 
-export const fetchTicketDownloadData = (bookingId, token) =>
-  apiFetch(`/bookings/${bookingId}/ticket/download`, { token })
+export const fetchTicketDownloadData = (bookingId) =>
+  apiFetch(`/bookings/${bookingId}/ticket/download`)
 
-export const verifyTicket = (payload, token) =>
+export const verifyTicket = (payload) =>
   apiFetch('/bookings/tickets/verify', {
     method: 'POST',
     body: payload,
-    token,
   })
 
-export const cancelBooking = (bookingId, token) =>
+export const cancelBooking = (bookingId) =>
   apiFetch(`/bookings/${bookingId}/cancel`, {
     method: 'POST',
-    token,
   })

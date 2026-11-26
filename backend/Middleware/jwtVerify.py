@@ -2,6 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from jose import JWTError
 
+from Modules.Auth.Dependencies import ACCESS_COOKIE_NAME
 from config.Jwt import decode_access_token
 
 
@@ -30,12 +31,15 @@ async def verify_jwt(request: Request, call_next):
     if request.url.path.startswith("/auth/google"):
         return await call_next(request)
 
-    # Get token from header or query
+    # Get token from header, access-token cookie, or query
     auth_header = request.headers.get("Authorization", "")
 
     if auth_header.startswith("Bearer "):
         token = auth_header[len("Bearer "):].strip()
     else:
+        token = request.cookies.get(ACCESS_COOKIE_NAME, "").strip()
+
+    if not token:
         token = request.query_params.get("token", "").strip()
 
     # Verify token

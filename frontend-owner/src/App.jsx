@@ -16,6 +16,7 @@ import MovieFormPage from './pages/MovieFormPage'
 import MovieDetailsPage from './pages/MovieDetailsPage'
 import ShowsPage from './pages/ShowsPage'
 import ShowFormPage from './pages/ShowFormPage'
+import ShowDetailsPage from './pages/ShowDetailsPage'
 import ProfilePage from './pages/ProfilePage'
 import AddScreenPage from './pages/AddScreenPage'
 import ScreensPage from './pages/ScreensPage'
@@ -51,6 +52,9 @@ function parseNavFromPath(pathname, role) {
   if (path === '/owner/movies/add') return { name: 'add-movie', theatreId: null }
   if (path === '/owner/shows') return { name: 'shows', theatreId: null }
   if (path === '/owner/shows/add') return { name: 'add-show', theatreId: null }
+
+  match = path.match(/^\/owner\/shows\/([^/]+)$/)
+  if (match) return { name: 'show-details', theatreId: match[1] }
   if (path === '/owner/profile') return { name: 'profile', theatreId: null }
 
   let match = path.match(/^\/owner\/theatres\/([^/]+)\/screens\/add$/)
@@ -98,6 +102,7 @@ function pathForNav(name, theatreId = null, role) {
     case 'movie-details': return `/owner/movies/${theatreId}`
     case 'shows': return '/owner/shows'
     case 'add-show': return '/owner/shows/add'
+    case 'show-details': return `/owner/shows/${theatreId}`
     case 'profile': return '/owner/profile'
     default: return '/owner/dashboard'
   }
@@ -115,6 +120,14 @@ function Shell() {
   const [loginPage, setLoginPage] = useState('login')
 
   const [nav, setNav] = useState(() => parseNavFromPath(window.location.pathname, null) || { name: 'dashboard', theatreId: null })
+
+  // One-shot success message handed from the movie form back to the Movies list.
+  const [movieNotice, setMovieNotice] = useState('')
+
+  function finishMovieForm({ saved, message } = {}) {
+    setMovieNotice(saved && message ? message : '')
+    setNav({ name: 'movies', theatreId: null })
+  }
 
   function go(name, theatreId = null, options = {}) {
     const next = { name, theatreId, returnTo: options.returnTo, picker: options.picker }
@@ -256,7 +269,7 @@ function Shell() {
       ? 'screens'
       : ['add-movie', 'edit-movie', 'movie-details'].includes(nav.name)
       ? 'movies'
-      : nav.name === 'add-show'
+      : ['add-show', 'show-details'].includes(nav.name)
         ? 'shows'
         : nav.name
 
@@ -312,17 +325,14 @@ function Shell() {
       )}
 
       {nav.name === 'screens' && <ScreensPage onNavigate={go} openPicker={Boolean(nav.picker)} />}
-      {nav.name === 'movies' && <MoviesPage onNavigate={go} />}
+      {nav.name === 'movies' && (
+        <MoviesPage onNavigate={go} notice={movieNotice} onNoticeShown={() => setMovieNotice('')} />
+      )}
       {nav.name === 'add-movie' && (
-        <MovieFormPage
-          onDone={() => setNav({ name: 'movies', theatreId: null })}
-        />
+        <MovieFormPage onDone={finishMovieForm} />
       )}
       {nav.name === 'edit-movie' && (
-        <MovieFormPage
-          movieId={nav.theatreId}
-          onDone={() => setNav({ name: 'movies', theatreId: null })}
-        />
+        <MovieFormPage movieId={nav.theatreId} onDone={finishMovieForm} />
       )}
       {nav.name === 'movie-details' && (
         <MovieDetailsPage movieId={nav.theatreId} onNavigate={go} />
@@ -332,6 +342,9 @@ function Shell() {
         <ShowFormPage
           onDone={() => setNav({ name: 'shows', theatreId: null })}
         />
+      )}
+      {nav.name === 'show-details' && (
+        <ShowDetailsPage showId={nav.theatreId} onNavigate={go} />
       )}
       {nav.name === 'profile' && <ProfilePage />}
     </Layout>
@@ -354,6 +367,7 @@ function buildBreadcrumb(name, theatreId) {
     case 'movie-details': return `Dashboard › Movies › Movie #${theatreId || ''}`.trim()
     case 'shows': return 'Dashboard › Shows'
     case 'add-show': return 'Dashboard › Shows › Schedule Show'
+    case 'show-details': return `Dashboard › Shows › Show #${theatreId || ''}`.trim()
     case 'profile': return 'Dashboard › Profile'
     default: return 'Dashboard'
   }

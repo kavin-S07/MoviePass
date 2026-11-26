@@ -1,3 +1,8 @@
+import { useEffect, useState } from 'react'
+
+import { fetchTicket } from '../services/bookings'
+import TicketQrBlock from '../components/TicketQrBlock'
+
 function money(n, currency = 'INR') { return `${currency === 'INR' ? '₹' : ''}${Number(n || 0).toFixed(2)}` }
 
 export default function PaymentResultPage({
@@ -15,6 +20,20 @@ export default function PaymentResultPage({
   const bookingRef = bookingStatus?.booking_reference || paymentResult?.result?.booking_reference
   const payment = bookingStatus?.payment
   const currency = bookingStatus?.currency || payment?.currency || 'INR'
+  const [ticket, setTicket] = useState(null)
+
+  // After a successful booking, fetch the ticket (and its QR) to show here.
+  useEffect(() => {
+    if (!isSuccess || !bookingId) {
+      setTicket(null)
+      return undefined
+    }
+    let cancelled = false
+    fetchTicket(bookingId)
+      .then((res) => { if (!cancelled) setTicket(res?.ticket || null) })
+      .catch(() => { if (!cancelled) setTicket(null) })
+    return () => { cancelled = true }
+  }, [isSuccess, bookingId])
 
   return (
     <div className="payment-result-page">
@@ -50,6 +69,10 @@ export default function PaymentResultPage({
           <button className="btn-secondary" onClick={onViewBookings}>My Bookings</button>
           <button className="btn-secondary" onClick={onGoHome}>Go to Home</button>
         </div>
+
+        {isSuccess && ticket && <div style={{ marginTop: 16 }}><TicketQrBlock ticket={ticket} /></div>}
+
+        {isSuccess && ticket && <div style={{ marginTop: 16 }}><TicketQrBlock ticket={ticket} /></div>}
 
         {isSuccess && (payment?.is_sandbox || paymentResult?.result?.is_sandbox) && <p className="muted-note">Note: In sandbox/test mode, this confirmation is based on isolated sandbox signature verification and is not a real money transaction.</p>}
         {isSuccess && !(payment?.is_sandbox || paymentResult?.result?.is_sandbox) && <p className="muted-note">Payment was verified on the server. Booking is confirmed only after captured payment verification.</p>}

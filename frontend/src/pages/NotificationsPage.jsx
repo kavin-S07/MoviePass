@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from '../services/notifications'
 
 
@@ -34,7 +33,6 @@ function timeText(d) {
 }
 
 export default function NotificationsPage({ onUnreadChange }) {
-  const { token } = useAuth()
   const navigate = useNavigate()
   const [filter, setFilter] = useState('all')
   const [items, setItems] = useState([])
@@ -45,7 +43,7 @@ export default function NotificationsPage({ onUnreadChange }) {
   async function load() {
     setLoading(true); setError('')
     try {
-      const res = await fetchNotifications(token)
+      const res = await fetchNotifications()
       setItems(res.notifications || [])
       setUnread(res.unread_count || 0)
       onUnreadChange?.(res.unread_count || 0)
@@ -57,14 +55,14 @@ export default function NotificationsPage({ onUnreadChange }) {
 
   async function markOne(id) {
     try {
-      await markNotificationRead(id, token)
+      await markNotificationRead(id)
       await load()
     } catch (e) { setError(e.message || 'Failed to mark notification as read') }
   }
 
   async function markAll() {
     try {
-      const res = await markAllNotificationsRead(token)
+      const res = await markAllNotificationsRead()
       setUnread(res.unread_count || 0)
       onUnreadChange?.(res.unread_count || 0)
       await load()

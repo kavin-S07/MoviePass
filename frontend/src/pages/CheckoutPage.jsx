@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import LockTimer, { useLockCountdown, useLockReminder } from '../components/LockTimer'
+import SeatLockReminderPopup from './SeatLockReminderPopup'
 
 function fmtTime(t) { return t ? String(t).slice(0, 5) : '' }
 function money(n, currency = 'INR') { return `${currency === 'INR' ? '₹' : ''}${Number(n || 0).toFixed(2)}` }
@@ -32,6 +34,8 @@ export default function CheckoutPage({
   fetchSandboxHelpers,
   createPaymentOrder,
   verifyRazorpayPayment,
+  lockExpiresAt,
+  onLockExpired,
   onBackToSeats,
   onPaymentResult,
 }) {
@@ -44,6 +48,15 @@ export default function CheckoutPage({
   const [sandboxHelpers, setSandboxHelpers] = useState(null)
   const [sandboxInputs, setSandboxInputs] = useState({ provider_payment_id: '', signature: '' })
   const paymentInFlightRef = useRef(false)
+
+  // The seat hold only matters until the booking/payment order is created.
+  const holdActive = Boolean(lockExpiresAt) && !checkoutData
+  const { expired: holdExpired } = useLockCountdown(holdActive ? lockExpiresAt : null)
+  const [reminderOpen, closeReminder] = useLockReminder(lockExpiresAt, { enabled: holdActive })
+
+  useEffect(() => {
+    if (holdActive && holdExpired && !paymentInFlightRef.current) onLockExpired?.()
+  }, [holdActive, holdExpired]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadSummary() {
     if (!lockToken) return
@@ -215,6 +228,14 @@ export default function CheckoutPage({
 
   return (
     <div className="checkout-page">
+      {reminderOpen && holdActive && !holdExpired && (
+        <SeatLockReminderPopup
+          expiresAt={lockExpiresAt}
+          onClose={closeReminder}
+          onComplete={() => { closeReminder(); if (!processing) handleCreateCheckout() }}
+          actionLabel="Pay Now →"
+        />
+      )}
       <div className="page-header-row">
         <div>
           <button className="btn-link back-link" onClick={onBackToSeats} disabled={processing}>← Back to seats</button>
@@ -222,6 +243,8 @@ export default function CheckoutPage({
           <p>Review your booking details and complete payment. Amounts are calculated and validated by the backend.</p>
         </div>
       </div>
+
+      {holdActive && <LockTimer expiresAt={lockExpiresAt} className="checkout-lock-timer" />}
 
       {(paymentError || error) && <div className="error-state-box inline-alert"><p>{paymentError || error}</p></div>}
 

@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { fetchProfile, fetchSessions, logoutAll, revokeSession, updateProfile } from '../services/auth'
 
 export default function BookerProfilePage({ onLogout }) {
-  const { token, user: authUser, setUser } = useAuth()
+  const { user: authUser, setUser } = useAuth()
   const [profile, setProfile] = useState(null)
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(false)
@@ -16,7 +16,7 @@ export default function BookerProfilePage({ onLogout }) {
   async function loadAll() {
     setLoading(true); setError(''); setMsg('')
     try {
-      const [p, s] = await Promise.all([fetchProfile(token), fetchSessions(token)])
+      const [p, s] = await Promise.all([fetchProfile(), fetchSessions()])
       setProfile(p)
       setSessions(s || [])
       setForm({ name: p?.name || '', phone_no: p?.phone_no || '' })
@@ -38,7 +38,7 @@ export default function BookerProfilePage({ onLogout }) {
       if (Object.keys(payload).length === 0) { setMsg('No changes to save.'); setEditing(false); return }
       if (payload.phone_no && !/^[0-9]{10}$/.test(payload.phone_no)) throw new Error('Phone number must be 10 digits')
       if (payload.name && payload.name.trim().length < 2) throw new Error('Name must be at least 2 characters')
-      const updated = await updateProfile(payload, token)
+      const updated = await updateProfile(payload)
       setProfile(updated)
       setForm({ name: updated?.name || '', phone_no: updated?.phone_no || '' })
       setMsg('Profile updated successfully.')
@@ -52,7 +52,7 @@ export default function BookerProfilePage({ onLogout }) {
     if (!window.confirm(isCurrent ? 'Revoke this current session? You may be logged out.' : 'Revoke this session?')) return
     setError(''); setMsg('')
     try {
-      await revokeSession(sessionId, token)
+      await revokeSession(sessionId)
       setMsg('Session revoked.')
       if (isCurrent) {
         await onLogout?.()
@@ -66,7 +66,7 @@ export default function BookerProfilePage({ onLogout }) {
     if (!window.confirm('Log out from all sessions? This will sign you out everywhere.')) return
     setError(''); setMsg('')
     try {
-      await logoutAll(token)
+      await logoutAll()
       setMsg('All sessions logged out.')
       await onLogout?.()
     } catch (e) {

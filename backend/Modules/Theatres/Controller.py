@@ -1,14 +1,17 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from config.database import get_db
 from Modules.Theatres import Service
 from Modules.Auth.Dependencies import get_token
 
+from Modules.Movies.Schema import MovieResponse
 from Modules.Theatres.Schema import (
     DashboardStats,
+    MapMovieToTheatreRequest,
+    TheatreMovieResponse,
     TheatrePayload,
     TheatreResponse,
     TheatreDetails
@@ -46,6 +49,37 @@ def list_theatres(
 ):
 
     return Service.list_my_theatres(db, token)
+
+
+# Movies mapped to the authenticated owner's theatre
+@router.get(
+    "/theatres/movies",
+    response_model=List[MovieResponse],
+    status_code=status.HTTP_200_OK
+)
+def my_theatre_movies(
+    search: str | None = Query(default=None, description="Search the theatre's movies by name"),
+    theatre_id: int | None = Query(default=None, description="Optional; must be a theatre you own"),
+    db: Session = Depends(get_db),
+    token: str = Depends(get_token)
+):
+
+    return Service.get_my_theatre_movies(db, token, search=search, theatre_id=theatre_id)
+
+
+# Map an existing movie to the authenticated owner's theatre
+@router.post(
+    "/theatres/movies",
+    response_model=TheatreMovieResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def map_movie_to_theatre(
+    payload: MapMovieToTheatreRequest,
+    db: Session = Depends(get_db),
+    token: str = Depends(get_token)
+):
+
+    return Service.map_movie_to_theatre(db, token, payload.movie_id, payload.theatre_id)
 
 
 # Theatre details

@@ -1,10 +1,11 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { BookingFlowProvider, useBookingFlow } from './context/BookingFlowContext'
 import { GuestOnly, RequireBooker } from './router/RouteGuards'
 import Navbar from './components/Navbar'
+import { useLockReminder } from './components/LockTimer'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
 import BookerHomePage from './pages/BookerHomePage'
@@ -45,34 +46,102 @@ function AuthLayout({ children }) {
 }
 
 function BookerLayout() {
-  const { user, token, logout } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const flow = useBookingFlow()
+  // Pending action the user tried to take while a payment is in progress.
+  const [leaveRequest, setLeaveRequest] = useState(null)
+  const [leaving, setLeaving] = useState(false)
 
-  useEffect(() => { if (token) flow.loadFilters() }, [token, flow.loadFilters])
-  useEffect(() => { if (token) flow.refreshUnreadCount() }, [token, location.pathname, flow.refreshUnreadCount])
+  useEffect(() => { flow.loadFilters() }, [flow.loadFilters])
+  useEffect(() => { flow.refreshUnreadCount() }, [location.pathname, flow.refreshUnreadCount])
   useEffect(() => {
     if (location.pathname === '/') flow.loadHome()
   }, [location.pathname, flow.loadHome, flow.city])
 
-  const handleSearchSubmit = () => {
-    const term = flow.searchInput.trim()
-    flow.setMovieSearch(term)
-    navigate(`/movies${term ? `?search=${encodeURIComponent(term)}` : ''}`)
+  const paymentGuard = flow.paymentGuard
+
+  // While paying: warn on tab close/refresh, and intercept the browser Back button.
+  useEffect(() => {
+    if (!paymentGuard) return undefined
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = '' }
+    const onPopState = () => {
+      if (window.location.pathname !== '/checkout') return
+      // Re-arm the trap and ask what to do.
+      window.history.pushState(window.history.state, '', window.location.href)
+      setLeaveRequest({ type: 'back' })
+    }
+    window.history.pushState(window.history.state, '', window.location.href)
+    window.addEventListener('beforeunload', onBeforeUnload)
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      window.removeEventListener('popstate', onPopState)
+    }
+  }, [paymentGuard])
+
+  // Pages that belong to a single movie/show booking attempt.
+  const inBookingFlow = /^\/shows\//.test(location.pathname) || /^\/movies\/[^/]+\/shows/.test(location.pathname) || location.pathname === '/checkout'
+
+  const runAction = (req) => {
+    if (req.type === 'city') {
+      flow.setCity(req.city)
+      flow.setSelectedShow(null)
+      flow.resetSeatContext()
+      if (inBookingFlow) navigate('/movies')
+    } else if (req.type === 'search') {
+      flow.setMovieSearch(req.term)
+      navigate(`/movies${req.term ? `?search=${encodeURIComponent(req.term)}` : ''}`)
+    } else if (req.type === 'logout') {
+      logout()
+    } else if (req.type === 'nav') {
+      navigate(req.to)
+    }
   }
 
-  const handleCityChange = (nextCity) => {
-    flow.setCity(nextCity)
-    flow.setSelectedShow(null)
-    flow.resetSeatContext()
+  // Run immediately, or ask for confirmation first when a payment is in progress.
+  const requestAction = (req) => {
+    if (flow.paymentGuard) setLeaveRequest(req)
+    else runAction(req)
   }
+
+  const handleSearchSubmit = () => requestAction({ type: 'search', term: flow.searchInput.trim() })
+  const handleCityChange = (nextCity) => requestAction({ type: 'city', city: nextCity })
+
+  const confirmLeavePayment = async () => {
+    const req = leaveRequest
+    if (!req) return
+    setLeaving(true)
+    const showId = flow.selectedShow?.show_id || flow.seatLayout?.show?.show_id || flow.lockShowIdRef.current
+    await flow.releaseActiveLock()
+    flow.setLockInfo(null)
+    flow.setSelectedSeatIds([])
+    flow.resetPaymentContext()
+    flow.setPaymentGuard(false)
+    setLeaveRequest(null)
+    setLeaving(false)
+    if (req.type === 'city' || req.type === 'logout') {
+      runAction(req)
+    } else if (showId) {
+      navigate(`/shows/${showId}/seats`, { replace: true })
+    } else {
+      navigate('/movies', { replace: true })
+    }
+  }
+
+  useEffect(() => {
+    if (!leaveRequest) return undefined
+    const onKey = (e) => { if (e.key === 'Escape' && !leaving) setLeaveRequest(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [leaveRequest, leaving])
 
   return (
     <div className="booker-app">
       <Navbar
         user={user}
-        onLogout={logout}
+        onLogout={() => requestAction({ type: 'logout' })}
         searchValue={flow.searchInput}
         onSearchChange={flow.setSearchInput}
         onSearchSubmit={handleSearchSubmit}
@@ -80,10 +149,32 @@ function BookerLayout() {
         cities={flow.filtersMeta.cities || []}
         onCityChange={handleCityChange}
         unreadCount={flow.unreadCount}
+        onNavigate={(to) => requestAction({ type: 'nav', to })}
       />
       <main className="booker-main">
         <Outlet />
       </main>
+
+      {leaveRequest && (
+        <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !leaving) setLeaveRequest(null) }}>
+          <div className="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="leave-payment-title" style={{ maxWidth: 440 }}>
+            <div className="modal-head">
+              <h2 id="leave-payment-title">Cancel payment?</h2>
+              <button type="button" className="modal-close" aria-label="Keep paying" onClick={() => setLeaveRequest(null)} disabled={leaving}>×</button>
+            </div>
+            <p className="muted-note" style={{ fontSize: '.95rem' }}>
+              Your payment is still in progress. If you leave now, the payment will be cancelled, your held seats will be released
+              and you will be taken back to seat selection.
+            </p>
+            <div className="leave-payment-actions">
+              <button type="button" className="btn-primary" onClick={() => setLeaveRequest(null)} disabled={leaving}>Continue Payment</button>
+              <button type="button" className="btn-danger-solid" onClick={confirmLeavePayment} disabled={leaving}>
+                {leaving ? 'Cancelling...' : 'Cancel Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -113,12 +204,11 @@ function HomeRoute() {
 }
 
 function MoviesRoute() {
-  const { token } = useAuth()
   const navigate = useNavigate()
   const flow = useBookingFlow()
   const [searchParams] = useSearchParams()
   const urlSearch = searchParams.get('search') || ''
-  const moviesFetcher = useCallback((params) => fetchBookerMovies(params, token), [token])
+  const moviesFetcher = useCallback((params) => fetchBookerMovies(params), [])
 
   useEffect(() => {
     if (urlSearch !== flow.movieSearch) {
@@ -139,27 +229,24 @@ function MoviesRoute() {
         flow.setSelectedMovie(movie)
         navigate(`/movies/${movie.movie_id}`)
       }}
-      onBook={(movie) => {
-        if (!movie?.movie_id) return
-        flow.beginBookingForMovie(movie)
-        navigate(`/movies/${movie.movie_id}/shows`)
-      }}
     />
   )
 }
 
 function MovieDetailsRoute() {
-  const { token } = useAuth()
   const { movieId } = useParams()
   const navigate = useNavigate()
   const flow = useBookingFlow()
-  const detailFetcher = useCallback((id) => fetchBookerMovieDetail(id, token), [token])
+  const detailFetcher = useCallback((id) => fetchBookerMovieDetail(id), [])
+  const discoveryFetcher = useCallback((id) => fetchBookerShowDiscovery(id), [])
 
   return (
     <MovieDetailsPage
       movieId={movieId}
       fetchDetail={detailFetcher}
+      fetchDiscovery={discoveryFetcher}
       onBack={() => navigate('/movies')}
+      onSelectShow={() => navigate(`/movies/${movieId}/shows`)}
       onBook={(movie) => {
         const m = movie?.movie_id ? movie : (flow.selectedMovie?.movie_id === movieId ? flow.selectedMovie : { movie_id: movieId, movie_name: movie?.movie_name || 'Movie' })
         const movieToUse = m?.movie_id ? m : { movie_id: movieId, ...(movie && typeof movie === 'object' ? movie : {}) }
@@ -172,24 +259,24 @@ function MovieDetailsRoute() {
 }
 
 function ShowSelectionRoute() {
-  const { token } = useAuth()
   const { movieId } = useParams()
   const navigate = useNavigate()
   const flow = useBookingFlow()
-  const showDiscoveryFetcher = useCallback((id, params) => fetchBookerShowDiscovery(id, params, token), [token])
+  const showDiscoveryFetcher = useCallback((id, params) => fetchBookerShowDiscovery(id, params), [])
 
-  const handleDateChange = (nextDate, opts = {}) => {
-    flow.setSelectedDate(nextDate || '')
+  const { setSelectedDate, setSelectedShow, resetSeatContext } = flow
+  const handleDateChange = useCallback((nextDate, opts = {}) => {
+    setSelectedDate(nextDate || '')
     if (!opts.syncOnly) {
-      flow.setSelectedShow(null)
-      flow.resetSeatContext()
+      setSelectedShow(null)
+      resetSeatContext()
     }
-  }
+  }, [setSelectedDate, setSelectedShow, resetSeatContext])
 
   const handleShowSelect = (show) => {
     const prevId = flow.selectedShow?.show_id
     flow.setSelectedShow(show)
-    if (!show || show.show_id !== prevId) {
+    if (!show || String(show.show_id) !== String(prevId)) {
       flow.resetSeatContext()
       flow.seatContextShowIdRef.current = show?.show_id || null
       flow.resetPaymentContext()
@@ -224,10 +311,12 @@ function ShowSelectionRoute() {
 }
 
 function SeatSelectionRoute() {
-  const { token } = useAuth()
   const { showId } = useParams()
   const navigate = useNavigate()
   const flow = useBookingFlow()
+
+  // Reminder popup shortly before the seat lock expires (anchored to the server's expires_at).
+  const [lockReminderOpen, closeLockReminder] = useLockReminder(flow.lockInfo?.expires_at)
 
   const loadSeatLayout = useCallback(async (sid, opts = {}) => {
     if (!sid) return
@@ -235,11 +324,15 @@ function SeatSelectionRoute() {
     flow.setSeatError('')
     if (!opts.silent) flow.setLockError('')
     try {
-      const data = await fetchShowSeatLayout(sid, token)
+      const data = await fetchShowSeatLayout(sid)
       flow.setSeatLayout(data)
+      // While we hold a lock for this show, our own seats show up as locked: keep them selected.
+      const holdingLock = String(flow.lockShowIdRef.current) === String(sid)
       flow.setSelectedSeatIds((prev) => prev.filter((id) => {
         const seat = (data.seats || []).find((s) => s.seat_id === id)
-        return seat && seat.availability_status === 'AVAILABLE' && seat.is_active
+        if (!seat) return false
+        if (holdingLock) return true
+        return seat.availability_status === 'AVAILABLE' && seat.is_active
       }))
       // enrich selectedShow/movie context if missing
       if (data?.show && !flow.selectedShow) {
@@ -252,7 +345,7 @@ function SeatSelectionRoute() {
     } finally {
       flow.setSeatLoading(false)
     }
-  }, [token, flow])
+  }, [flow])
 
   useEffect(() => { if (showId) loadSeatLayout(showId) }, [showId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -276,7 +369,8 @@ function SeatSelectionRoute() {
     flow.setLocking(true)
     flow.setLockError('')
     try {
-      const res = await lockShowSeats(showId, flow.selectedSeatIds, token)
+      const res = await lockShowSeats(showId, flow.selectedSeatIds)
+      flow.lockShowIdRef.current = showId
       flow.setLockInfo(res)
       flow.setSelectedSeatIds((res.seats || []).map((s) => s.seat_id))
       await loadSeatLayout(showId, { silent: true })
@@ -295,11 +389,12 @@ function SeatSelectionRoute() {
     flow.setLockError('')
     try {
       if (flow.lockInfo?.lock_token || flow.lockInfo) {
-        await releaseShowSeatLocks(showId, payload, token)
+        await releaseShowSeatLocks(showId, payload)
       }
     } catch (err) {
       if (!opts.silent) flow.setLockError(err.message || 'Failed to release seat lock')
     } finally {
+      flow.lockShowIdRef.current = null
       flow.setLockInfo(null)
       flow.setSelectedSeatIds([])
       flow.setLocking(false)
@@ -308,12 +403,16 @@ function SeatSelectionRoute() {
   }
 
   const handleLockExpired = async () => {
+    flow.lockShowIdRef.current = null
     flow.setLockInfo(null)
+    flow.setSelectedSeatIds([])
     flow.setLockError('Your seat lock has expired. Please select seats again.')
     await loadSeatLayout(showId, { silent: true })
   }
 
-  const showForPage = flow.selectedShow?.show_id === showId ? flow.selectedShow : (flow.seatLayout?.show ? { show_id: showId, ...flow.seatLayout.show } : { show_id: showId })
+  const showForPage = String(flow.selectedShow?.show_id) === String(showId)
+    ? { ...(flow.seatLayout?.show || {}), ...flow.selectedShow }
+    : (flow.seatLayout?.show ? { show_id: showId, ...flow.seatLayout.show } : { show_id: showId })
 
   if (!showId) return <Navigate to="/movies" replace />
 
@@ -324,6 +423,8 @@ function SeatSelectionRoute() {
       seatLayout={flow.seatLayout}
       selectedSeatIds={flow.selectedSeatIds}
       lockInfo={flow.lockInfo}
+      lockReminderOpen={lockReminderOpen}
+      closeLockReminder={closeLockReminder}
       loading={flow.seatLoading}
       error={flow.seatError}
       lockError={flow.lockError}
@@ -344,23 +445,37 @@ function SeatSelectionRoute() {
 }
 
 function CheckoutRoute() {
-  const { token } = useAuth()
   const navigate = useNavigate()
   const flow = useBookingFlow()
-  const summaryFetcher = useCallback((lockToken) => fetchBookingSummary(lockToken, token), [token])
-  const checkoutCreator = useCallback((lockToken) => createBookingCheckout(lockToken, token), [token])
-  const paymentVerifier = useCallback((bookingId, payload) => verifyBookingPayment(bookingId, payload, token), [token])
-  const sandboxHelpersFetcher = useCallback((bookingId) => fetchSandboxPaymentHelpers(bookingId, token), [token])
-  const bookingStatusFetcher = useCallback((bookingId) => fetchBookingStatus(bookingId, token), [token])
-  const paymentOrderCreator = useCallback((bookingId) => createPaymentOrder(bookingId, token), [token])
-  const razorpayVerifier = useCallback((payload) => verifyRazorpayPayment(payload, token), [token])
+  const summaryFetcher = useCallback((lockToken) => fetchBookingSummary(lockToken), [])
+  const checkoutCreator = useCallback((lockToken) => createBookingCheckout(lockToken), [])
+  const paymentVerifier = useCallback((bookingId, payload) => verifyBookingPayment(bookingId, payload), [])
+  const sandboxHelpersFetcher = useCallback((bookingId) => fetchSandboxPaymentHelpers(bookingId), [])
+  const bookingStatusFetcher = useCallback((bookingId) => fetchBookingStatus(bookingId), [])
+  const paymentOrderCreator = useCallback((bookingId) => createPaymentOrder(bookingId), [])
+  const razorpayVerifier = useCallback((payload) => verifyRazorpayPayment(payload), [])
+
+  // Mark the payment step as "in progress" so leaving the page asks for confirmation.
+  const { setPaymentGuard } = flow
+  useEffect(() => {
+    setPaymentGuard(true)
+    return () => setPaymentGuard(false)
+  }, [setPaymentGuard])
 
   const lockToken = flow.lockInfo?.lock_token
-  const showId = flow.selectedShow?.show_id || flow.seatLayout?.show?.show_id
+  const showId = flow.selectedShow?.show_id || flow.seatLayout?.show?.show_id || flow.lockShowIdRef.current
 
   if (!lockToken) {
     if (showId) return <Navigate to={`/shows/${showId}/seats`} replace />
     return <Navigate to="/movies" replace />
+  }
+
+  const handleLockExpired = () => {
+    flow.setLockInfo(null)
+    flow.setSelectedSeatIds([])
+    flow.setLockError('Your seat hold has expired. Please select your seats again.')
+    if (showId) navigate(`/shows/${showId}/seats`, { replace: true })
+    else navigate('/movies', { replace: true })
   }
 
   const handlePaymentResult = async (resultFlow) => {
@@ -387,6 +502,8 @@ function CheckoutRoute() {
       fetchSandboxHelpers={sandboxHelpersFetcher}
       createPaymentOrder={paymentOrderCreator}
       verifyRazorpayPayment={razorpayVerifier}
+      lockExpiresAt={flow.lockInfo?.expires_at}
+      onLockExpired={handleLockExpired}
       onBackToSeats={() => showId ? navigate(`/shows/${showId}/seats`) : navigate('/movies')}
       onPaymentResult={handlePaymentResult}
     />
@@ -394,12 +511,20 @@ function CheckoutRoute() {
 }
 
 function PaymentResultRoute() {
-  const { token } = useAuth()
   const navigate = useNavigate()
   const flow = useBookingFlow()
-  const bookingStatusFetcher = useCallback((bookingId) => fetchBookingStatus(bookingId, token), [token])
+  const bookingStatusFetcher = useCallback((bookingId) => fetchBookingStatus(bookingId), [])
 
   const pf = flow.paymentFlow
+  const { setLockInfo, setSelectedSeatIds } = flow
+  // Booking confirmed: the seat lock has been consumed, drop it so /checkout can't be reopened with a stale token.
+  useEffect(() => {
+    if (pf?.status === 'success') {
+      setLockInfo(null)
+      setSelectedSeatIds([])
+    }
+  }, [pf?.status, setLockInfo, setSelectedSeatIds])
+
   const hasResult = pf && (pf.status || pf.bookingId || pf.result)
   if (!hasResult) {
     return <Navigate to="/bookings" replace />
@@ -408,7 +533,7 @@ function PaymentResultRoute() {
   const handleRetryPayment = async (bookingId) => {
     flow.setPaymentRetrying(true)
     try {
-      await retryBookingPayment(bookingId, token)
+      await retryBookingPayment(bookingId)
       const st = await bookingStatusFetcher(bookingId)
       flow.setPaymentBookingStatus(st)
       flow.setPaymentFlow({ status: 'retry', bookingId, result: null, message: '' })

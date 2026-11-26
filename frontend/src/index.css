@@ -1,27 +1,44 @@
 :root {
-  /* Cinematic Design System */
-  --bg-main: #0B1020;
-  --bg-secondary: #10182B;
-  --bg-card: #151C2E;
-  --bg-elevated: #1C263A;
-  --brand-primary: #F04438;
-  --brand-primary-hover: #D9362B;
-  --btn-secondary: #263248;
-  --text-primary: #FFFFFF;
-  --text-secondary: #A7B0C0;
-  --text-muted: #778399;
-  --border-color: #263248;
-  --success: #22C55E;
-  --warning: #F5B942;
-  --error: #EF4444;
-  --info: #3B82F6;
+  /* ── District design tokens (pink → purple identity) ────────────────── */
+  --brand-primary: #6444E4;          /* Primary Purple */
+  --brand-primary-hover: #5A3CD0;    /* Primary Purple hover */
+  --brand-accent: #E13FF3;           /* Primary Pink — accents/highlights */
+  --brand-secondary: #9988DC;        /* Secondary Purple */
+  --brand-violet: #6E52FA;           /* Theme Purple */
 
-  /* Seat status */
-  --seat-available: #334155;
-  --seat-selected: #F04438;
-  --seat-booked: #64748B;
-  --seat-premium: #D4A64A;
-  --seat-unavailable: #252B36;
+  --btn-secondary: #F6F4FF;
+  --text-primary: #131316;
+  --text-secondary: #4A4A55;
+  --text-muted: #7A7A86;
+  --border-color: #E3E3E9;
+  --border-focus: #6444E4;
+
+  --bg-main: #F7F7F7;                /* Light Background */
+  --bg-secondary: #F6F4FF;           /* Light Purple Background */
+  --bg-card: #FFFFFF;                /* White */
+  --bg-elevated: #F2F0FF;
+
+  --success: #16A34A;
+  --warning: #D97706;
+  --error: #DC2626;
+  --info: #6444E4;
+
+  /* Subtle pink-to-purple gradients (District identity) */
+  --brand-gradient: linear-gradient(135deg, #E13FF3 0%, #6444E4 100%);
+  --brand-gradient-soft: linear-gradient(135deg, #F6F4FF 0%, #E7E1FF 100%);
+  --brand-gradient-violet: linear-gradient(135deg, #9988DC 0%, #6E52FA 100%);
+
+  /* Elevated shadows */
+  --shadow-sm: 0 2px 8px rgba(15, 15, 22, 0.07);
+  --shadow-md: 0 6px 20px rgba(15, 15, 22, 0.10);
+  --shadow-lg: 0 16px 40px rgba(15, 15, 22, 0.14);
+
+  /* Seat status (light-theme adaptation) */
+  --seat-available: #E5E7EB;
+  --seat-selected: #E13FF3;
+  --seat-booked: #9CA3AF;
+  --seat-premium: #D97706;
+  --seat-unavailable: #D1D5DB;
 
   --radius-sm: 8px;
   --radius-md: 10px;
@@ -48,9 +65,59 @@ body {
   min-width: 320px;
   background: var(--bg-main);
   color: var(--text-primary);
+  /* Global UI scale: mirrors what ~67% browser zoom looks like. */
+  zoom: 0.67;
 }
 
 a { color: inherit; }
+
+/* Global: non-editable UI never shows a text caret or text selection
+   (buttons, links, cards, headings, labels, icons, nav bars, modals).
+   Non-interactive text uses the default cursor instead of the I-beam.
+   Editable inputs keep normal selection/caret behavior. */
+button,
+a,
+[role="button"],
+nav,
+h1, h2, h3, h4, h5, h6,
+p, span, i, svg, label,
+.card, .panel, .theatre-card, .movie-card, .show-card, .screen-card,
+.hero-section, .selection-panel, .seat-map-panel, .modal-backdrop,
+.profile-dropdown, .date-pill, .showtime-chip, .ticket-view-card,
+.bookings-section, .screen-indicator {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: default;
+}
+
+/* Clickable elements use the pointer cursor. */
+button,
+a,
+[role="button"],
+nav,
+svg,
+.card, .panel, .movie-card, .show-card, .screen-card, .theatre-card,
+.date-pill, .showtime-chip, .seat-cell, .quick-chip, .notif-link {
+  cursor: pointer;
+}
+
+/* Disabled controls show the not-allowed cursor. */
+button:disabled, input:disabled, select:disabled, textarea:disabled,
+.seat-cell:disabled, .showtime-chip.unavailable, .showtime-chip.cancelled,
+.date-pill.disabled, .btn-disabled, .btn-danger:disabled {
+  cursor: not-allowed;
+}
+
+/* Editable text uses the I-beam cursor, as expected for inputs. */
+input,
+textarea,
+[contenteditable="true"],
+[contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
 
 button, input, select, textarea { font: inherit; color: inherit; }
 

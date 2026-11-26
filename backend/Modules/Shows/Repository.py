@@ -1,6 +1,8 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from Modules.Theatres.Model import Movie, Screen, Show, Theatre
+from Modules.Bookings.Model import Booking, BookingSeat, SeatLock
+from Modules.Theatres.Model import Movie, Screen, Seat, Show, Theatre
 
 
 def list_owner_shows(db: Session, owner_id: int | None):
@@ -91,3 +93,84 @@ def get_show_enriched(db: Session, show_id: int):
     ).filter(
         Show.show_id == show_id
     ).first()
+
+
+def get_show_booking_summary(db: Session, show_id: int):
+    show = get_show_enriched(db, show_id)
+    if not show:
+        return None
+
+    total_seats = db.query(func.count(Seat.seat_id)).filter(
+        Seat.screen_id == show.screen_id,
+        Seat.is_active == True,  # noqa: E712
+    ).scalar() or 0
+
+    booked_seats = db.query(func.count(func.distinct(BookingSeat.seat_id))).filter(
+        BookingSeat.show_id == show_id,
+        BookingSeat.seat_status.in_(["HELD", "CONFIRMED"]),
+    ).scalar() or 0
+
+    locked_seats = db.query(func.count(func.distinct(SeatLock.seat_id))).filter(
+        SeatLock.show_id == show_id,
+        SeatLock.lock_status == "ACTIVE",
+        SeatLock.expires_at > func.now(),
+    ).scalar() or 0
+
+    # Avoid double-counting seats that are both locked and held in booking flow edge cases.
+    locked_not_booked = db.query(func.count(func.distinct(SeatLock.seat_id))).filter(
+        SeatLock.show_id == show_id,
+        SeatLock.lock_status == "ACTIVE",
+        SeatLock.expires_at > func.now(),
+        ~SeatLock.seat_id.in_(
+            db.query(BookingSeat.seat_id).filter(
+                BookingSeat.show_id == show_id,
+                BookingSeat.seat_status.in_(["HELD", "CONFIRMED"]),
+            )
+        ),
+    ).scalar() or 0
+
+    available_seats = max(total_seats - booked_seats - locked_not_booked, 0)
+
+    booking_rows = db.query(
+        Booking.booking_status,
+        func.count(Booking.booking_id),
+        func.coalesce(func.sum(Booking.total_amount), 0),
+    ).filter(
+        Booking.show_id == show_id,
+    ).group_by(Booking.booking_status).all()
+
+    counts = {status: int(count) for status, count, _ in booking_rows}
+    revenue = {status: float(amount) for status, _, amount in booking_rows}
+
+    total_bookings = sum(counts.values())
+    confirmed_bookings = counts.get("CONFIRMED", 0)
+    pending_bookings = counts.get("PENDING", 0) + counts.get("PAYMENT_PENDING", 0)
+    cancelled_bookings = counts.get("CANCELLED", 0) + counts.get("EXPIRED", 0)
+    failed_bookings = counts.get("FAILED", 0)
+
+    total_revenue = sum(revenue.values())
+    confirmed_revenue = revenue.get("CONFIRMED", 0.0)
+
+    return {
+        "show_id": show.show_id,
+        "movie_name": show.movie_name,
+        "theatre_id": show.theatre_id,
+        "theatre_name": show.theatre_name,
+        "screen_id": show.screen_id,
+        "screen_name": show.screen_name,
+        "show_date": show.show_date,
+        "start_time": show.start_time,
+        "end_time": show.end_time,
+        "show_status": show.status,
+        "total_seats": int(total_seats),
+        "booked_seats": int(booked_seats),
+        "locked_seats": int(locked_not_booked),
+        "available_seats": int(available_seats),
+        "total_bookings": int(total_bookings),
+        "confirmed_bookings": int(confirmed_bookings),
+        "pending_bookings": int(pending_bookings),
+        "cancelled_bookings": int(cancelled_bookings),
+        "failed_bookings": int(failed_bookings),
+        "total_revenue": float(total_revenue),
+        "confirmed_revenue": float(confirmed_revenue),
+    }

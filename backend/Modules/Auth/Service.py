@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from Modules.Auth import Repository
+from Modules.Auth.Dependencies import ACCESS_COOKIE_NAME
 from config.Jwt import (
     REFRESH_TOKEN_EXPIRY,
     create_access_token,
@@ -146,6 +147,32 @@ def clear_refresh_cookie(response: Response):
     )
 
 
+# The access token lives in an HttpOnly cookie so it is never exposed
+# to JavaScript; the browser sends it automatically on API requests
+# (credentials: 'include').
+def set_access_cookie(response: Response, access_token: str):
+
+    response.set_cookie(
+        key=ACCESS_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=refresh_cookie_secure(),
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_access_cookie(response: Response):
+
+    response.delete_cookie(
+        key=ACCESS_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        secure=refresh_cookie_secure(),
+        samesite="lax",
+    )
+
+
 def _create_session_record(db: Session, user_id: int, jti: str, expires_at, request: Request):
 
     info = get_device_info(request)
@@ -268,6 +295,7 @@ def _signup(db: Session, user_data, request: Request, response: Response, role: 
         message = "Signup successful. Your application is pending Admin approval."
 
     set_refresh_cookie(response, refresh_token)
+    set_access_cookie(response, access_token)
 
     return _auth_response(message, new_user, access_token)
 
@@ -310,6 +338,7 @@ def login_user(db: Session, login_data, request: Request, response: Response):
     db.commit()
 
     set_refresh_cookie(response, refresh_token)
+    set_access_cookie(response, access_token)
 
     return _auth_response("Login successful", user, access_token)
 
@@ -428,6 +457,7 @@ def refresh_user_session(db: Session, request: Request, response: Response):
     db.commit()
 
     set_refresh_cookie(response, new_refresh_token)
+    set_access_cookie(response, new_access_token)
 
     return {
         "access_token": new_access_token,
@@ -462,6 +492,7 @@ def logout_user_session(db: Session, request: Request, response: Response):
 
             db.rollback()
 
+    clear_access_cookie(response)
     clear_refresh_cookie(response)
 
     return {"message": "Logout successful"}
@@ -475,6 +506,7 @@ def logout_all_user_sessions(db: Session, token: str, response: Response):
 
     db.commit()
 
+    clear_access_cookie(response)
     clear_refresh_cookie(response)
 
     return {"message": "All sessions logged out"}

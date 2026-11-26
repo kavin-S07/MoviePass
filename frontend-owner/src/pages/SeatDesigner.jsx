@@ -9,6 +9,7 @@ import {
   fitSeatSize,
   formatINR,
   gridVars,
+  toDesignPx,
   rowLabel,
   seatKey,
 } from './seatLayoutUtils'
@@ -244,7 +245,7 @@ export default function SeatDesigner({ initialScreen, initialLayout = null, onSa
     [categories]
   )
 
-  const colorOf = (name) => colorMap.get(name) || '#94a3b8'
+  const colorOf = (name) => colorMap.get(name) || '#7A7A8C'
 
   const allKeys = useMemo(() => {
 
@@ -617,7 +618,7 @@ export default function SeatDesigner({ initialScreen, initialLayout = null, onSa
 
     if (!el) return
 
-    setSeatSize(fitSeatSize(el.clientWidth - 32, no_of_columns, doc.vGaps.length))
+    setSeatSize(fitSeatSize(toDesignPx(el.clientWidth) - 32, no_of_columns, doc.vGaps.length))
   }
 
   useEffect(() => {
@@ -1032,7 +1033,7 @@ export default function SeatDesigner({ initialScreen, initialLayout = null, onSa
                 ))
                 : (
                   <span className="legend-item">
-                    <span className="legend-dot" style={{ background: categories[0]?.color || '#3b82f6' }} />
+                    <span className="legend-dot" style={{ background: categories[0]?.color || '#6444E4' }} />
                     Available
                   </span>
                 )}
